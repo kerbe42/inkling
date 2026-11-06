@@ -10,7 +10,7 @@ Inkling runs entirely on the Kindle and talks directly to the AI service you cho
 **Google Gemini**, **Amazon Bedrock**, **xAI Grok**, **Mistral** or **OpenRouter**) with **your own API key**. No
 computer or server is needed once it's installed.
 
-**[▶ Watch the demo (99 seconds)](../../releases/download/v0.3.0/inkling-demo.mp4)**
+**[▶ Watch the demo (88 seconds)](../../releases/download/v0.3.0/inkling-demo.mp4)**
 
 Free for personal use. Published by JSSL. This repository holds the downloads and documentation only; the source code
 isn't public.
