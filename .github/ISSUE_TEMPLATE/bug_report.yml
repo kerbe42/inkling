@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Inkling doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        **Never paste API keys, app passwords or GitHub tokens here - not in the text, not in logs, not in screenshots.** Issues are public. If something you want to paste contains a key, delete the key first.
+  - type: input
+    id: version
+    attributes:
+      label: Inkling version
+      description: Menu > Check for updates shows the version you have (for example 0.4.0).
+      placeholder: "0.4.0"
+    validations:
+      required: true
+  - type: input
+    id: kindle
+    attributes:
+      label: Kindle model and firmware
+      description: On the Kindle, Settings > Device Options > Device Info shows the model and the firmware version.
+      placeholder: "Kindle Scribe (1st generation), firmware 5.19.6"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Inkling?
+      options:
+        - Installing or updating
+        - Writing and replies (Chat, Type up, Math, Translate)
+        - Handwriting or drawing on the page
+        - Email a page
+        - Games
+        - Settings, keys or AI services
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, including any message in the status line at the top of the screen.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, step by step, so it can be made to happen again.
+      placeholder: |
+        1. Open Inkling in Chat mode
+        2. Write ...
+        3. Pause ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: ai-service
+    attributes:
+      label: AI service and model (if relevant)
+      description: Shown in the status line when Inkling opens, and in Menu > Settings > AI & keys. The service name only - never the key.
+      placeholder: "Claude, fast"
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (if relevant)
+      description: |
+        Install problems: the last lines of `inkling/install-log.txt` on the Kindle's USB storage (connect the Kindle to a computer). If you have a shell on the Kindle, the app's own log is `/var/local/scribe/app/scribe.log`; paste only its last 30 or so lines. Check that nothing you paste contains a key, password or token.
+      render: text
