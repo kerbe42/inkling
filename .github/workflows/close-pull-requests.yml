@@ -1,5 +1,5 @@
-# This repository holds Inkling's releases and documentation only; it doesn't accept changes. Every pull request gets
-# a short reply and is closed. Safe for pull_request_target: no checkout, no code from the pull request runs, and no
+# Inkling's source is open (GPL-3.0), but the project doesn't take pull requests. Every pull request gets a short reply
+# and is closed. Safe for pull_request_target: no checkout, no code from the pull request runs, and no
 # value from it (title, branch, body) reaches the shell - only the PR number, through an environment variable.
 # Runs on a GitHub-hosted runner: never point a public repository's workflows at a self-hosted runner.
 name: Close pull requests
@@ -22,4 +22,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr close "$PR_NUMBER" --comment "Thanks - this repository doesn't accept changes; please open an issue instead."
+          gh pr close "$PR_NUMBER" --comment "Thanks! This project doesn't take pull requests. Please open an issue describing the change instead."

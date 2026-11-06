@@ -1,0 +1,60 @@
+#!/bin/sh
+# Name: Install Inkling
+# Author: tap once to install or update
+# Icon: @ICON@
+# DontUseFBInk
+# Installs (or updates) Inkling from the inkling/install folder on the Kindle's USB storage.
+# Needs a jailbroken Kindle Scribe (the jailbreak's shell integration runs this file; its su gives root).
+ME="/mnt/us/documents/Install Inkling.sh"
+USB=/mnt/us/inkling
+OLD=/mnt/us/scribe-claude # the folder's name up to 0.2.x, when the app was called Scribe
+if [ "$(id -u)" != 0 ]; then
+	for su in /var/local/mkk/su /var/local/kmc/bin/su /var/local/kmc/kindlehf/bin/su; do
+		[ -x "$su" ] && exec "$su" -c "/bin/sh \"$ME\""
+	done
+	echo "Inkling: root (su) not found - is the Kindle jailbroken?" > "$USB/install-log.txt"
+	exit 1
+fi
+SRC=$USB/install
+LOG=$USB/install-log.txt
+# progress on screen with the Kindle's own eips (a line of text; the log has every message)
+say() { echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"; eips 1 12 "$1" >/dev/null 2>&1; }
+if [ ! -s "$SRC/scribe" ] || [ ! -s "$SRC/launch.sh" ] || [ ! -s "$SRC/inkling.sh" ]; then
+	say "Inkling: install files missing - copy the inkling folder to the Kindle first"
+	exit 1
+fi
+# stop a running copy (its launcher resumes the Kindle UI)
+if pidof scribe >/dev/null; then kill $(pidof scribe); sleep 3; fi
+# Updating from Scribe: its folder's settings, notebooks and key files move into the new folder once (a rename on the
+# same storage; nothing is overwritten), as long as the new folder isn't in use yet (no config.txt or notebooks).
+# The old install files go: the new ones replace them. Whatever both folders have stays in the old one.
+if [ -d "$OLD" ]; then
+	if [ ! -e "$USB/config.txt" ] && [ ! -e "$USB/notebooks" ]; then
+		for f in "$OLD"/* "$OLD"/.[!.]*; do
+			[ -e "$f" ] || continue
+			[ -e "$USB/${f##*/}" ] || mv "$f" "$USB/" || echo "$(date '+%Y-%m-%d %H:%M:%S') could not move $f" >> "$LOG"
+		done
+		rm -rf "$OLD/install" "$OLD/licences"
+		rmdir "$OLD" 2>/dev/null && echo "$(date '+%Y-%m-%d %H:%M:%S') moved the files of $OLD into $USB" >> "$LOG"
+	fi
+	[ -d "$OLD" ] && echo "$(date '+%Y-%m-%d %H:%M:%S') $OLD is still there (it has files that $USB has too); Inkling uses $USB" >> "$LOG"
+fi
+mkdir -p /var/local/scribe/bin /var/local/scribe/app
+cp -f "$SRC/scribe" /var/local/scribe/bin/scribe.new && chmod 755 /var/local/scribe/bin/scribe.new &&
+	mv -f /var/local/scribe/bin/scribe.new /var/local/scribe/bin/scribe || { say "Inkling: could not copy the app"; exit 1; }
+# renamed into place, not overwritten: the launcher of the copy just stopped may still be reading its old file
+cp -f "$SRC/launch.sh" /var/local/scribe/app/launch.sh.new && chmod 755 /var/local/scribe/app/launch.sh.new &&
+	mv -f /var/local/scribe/app/launch.sh.new /var/local/scribe/app/launch.sh
+# the email helper for Send > Email this page (curl with SMTP; the Kindle's own curl has none)
+if [ -s "$SRC/curl-smtp" ]; then
+	cp -f "$SRC/curl-smtp" /var/local/scribe/bin/curl-smtp.new && chmod 755 /var/local/scribe/bin/curl-smtp.new &&
+		mv -f /var/local/scribe/bin/curl-smtp.new /var/local/scribe/bin/curl-smtp ||
+		say "Inkling: could not copy the email helper (emailing pages will not work)"
+fi
+cp -f "$SRC/inkling.sh" /mnt/us/documents/inkling.sh
+# the Library items' older names (the app was called Scribe up to 0.2.x)
+rm -f /mnt/us/documents/scribe.sh "/mnt/us/documents/Scribe Claude.sh" "/mnt/us/documents/Install Scribe.sh" \
+	"/mnt/us/documents/Uninstall Scribe.sh"
+VER=$(cat "$SRC/VERSION" 2>/dev/null)
+say "Inkling $VER installed. Add your API key (see README.txt), then open Inkling from your library."
+exit 0

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Name: Uninstall Inkling
+# Author: removes the app (keeps your notebooks)
+# DontUseFBInk
+# Removes Inkling: the app, its library entry and its root-only data (API keys, conversation history).
+# Your notebooks (inkling/notebooks) and settings (inkling/config.txt) on the USB storage are kept.
+ME="/mnt/us/documents/Uninstall Inkling.sh"
+if [ "$(id -u)" != 0 ]; then
+	for su in /var/local/mkk/su /var/local/kmc/bin/su /var/local/kmc/kindlehf/bin/su; do
+		[ -x "$su" ] && exec "$su" -c "/bin/sh \"$ME\""
+	done
+	exit 1
+fi
+if pidof scribe >/dev/null; then kill $(pidof scribe); sleep 3; fi
+rm -f /var/local/scribe/bin/scribe /var/local/scribe/bin/curl-smtp /var/local/scribe/app/launch.sh /var/local/scribe/app/state /var/local/scribe/app/scribe.log*
+# what Menu > Check for updates leaves: the previous version, half-finished files, the staging folder
+rm -f /var/local/scribe/bin/scribe.prev /var/local/scribe/bin/*.new /var/local/scribe/app/launch.sh.prev /var/local/scribe/app/*.new
+rm -rf /var/local/scribe/update
+rmdir /var/local/scribe/app /var/local/scribe/bin /var/local/scribe 2>/dev/null
+rm -rf /var/local/scribe-claude
+# the Library items, under their names now and up to 0.2.x (when the app was called Scribe)
+rm -f /mnt/us/documents/inkling.sh "/mnt/us/documents/Uninstall Inkling.sh" \
+	/mnt/us/documents/scribe.sh "/mnt/us/documents/Scribe Claude.sh" "/mnt/us/documents/Install Scribe.sh" \
+	"/mnt/us/documents/Uninstall Scribe.sh"
+eips 1 12 "Inkling removed. Your notebooks are still in inkling/notebooks." >/dev/null 2>&1
+exit 0

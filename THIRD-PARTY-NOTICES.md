@@ -1,7 +1,9 @@
 # Third-party notices
 
-Inkling is published by JSSL under its own licence (LICENSE.md). It includes the third-party components below, each
-under its own licence. Their full licence texts also come with every download, in the `inkling/licences` folder:
+Inkling itself is published by JSSL under the GNU General Public License, version 3 (LICENSE). It includes the
+third-party components below, each under its own licence; in this repository they sit in `device/app/vendor` and
+`device/app/fonts` with their notices. Their full licence texts also come with every download, in the
+`inkling/licences` folder:
 `cJSON-LICENSE`, `Monocypher-LICENCE.md`, `stb-LICENSE`, `CURL-MBEDTLS-LICENSES.txt` (curl's licence and the Apache License 2.0),
 `OFL.txt`, `HERSHEY-NOTICE.txt` and `FONT-CREDITS.txt`.
 

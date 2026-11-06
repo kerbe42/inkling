@@ -1,0 +1,60 @@
+Handwriting fonts in Inkling: sources, credits and licences
+===========================================================
+
+Inkling draws handwritten replies stroke by stroke from single-stroke ("single-line") fonts. The font files in this
+folder are the sources; device/app/gen_strokefonts.py converts them into the C tables built into the app
+(device/app/stroke_fonts.c and device/app/ofl_fonts.h). The conversion keeps ASCII 32..126, flattens curves into
+short lines, rescales the glyphs and adds dotless i and j. The fonts are named in the app by how they look.
+
+1. Hershey fonts (fonts/*.jhf) - see HERSHEY-NOTICE.txt for the required acknowledgements and terms
+---------------------------------------------------------------------------------------------------
+The Hershey Fonts were originally created by Dr. A. V. Hershey while working at the U. S. National Bureau of
+Standards. The format of the font data was originally created by James Hurt, Cognition, Inc.
+
+  App setting (id)          Label in the app            File
+  script                    Classic looped cursive      scripts.jhf (Script Simplex)
+  elegant                   Bold looped cursive         scriptc.jhf (Script Complex)
+  cursive                   Simple cursive              cursive.jhf
+  print                     Neat print                  futural.jhf (Simplex Roman / Futura Light)
+  boldprint                 Bold print                  futuram.jhf (Duplex Roman / Futura Medium)
+  serif                     Classic book serif          timesr.jhf (Times Roman)
+  italic                    Book italic                 timesi.jhf (Times Italic)
+  gothic                    English blackletter         gothiceng.jhf (Gothic English)
+  rotunda                   Italian blackletter         gothicita.jhf (Gothic Italian)
+
+2. EMS single-line SVG fonts (fonts/svg/EMS*.svg) - SIL Open Font License, Version 1.1 (OFL.txt)
+-------------------------------------------------------------------------------------------------
+Single-line versions created by Sheldon B. Michaels, SVG font conversion by Windell H. Oskay (Evil Mad Scientist
+Laboratories), from fonts licensed under the SIL Open Font License; credit and licence are embedded in each SVG
+file's metadata. Source: https://gitlab.com/oskay/svg-fonts (fonts/EMS). The files here are unchanged copies.
+Each is listed with the font it is a derivative of and that font's designer.
+
+  App setting (id)  Label in the app           File                       A derivative of         Designer
+  copperplate       Copperplate-style script   EMSDecorousScript.svg      Petit Formal Script     Impallari Type
+  flowing           Formal flowing script      EMSAllure.svg              Allura                  Rob Leuschke, TypeSETit
+  signature         Old-fashioned signature    EMSSociety.svg             Mrs Saint Delafield     Alejandro Paul, Sudtipos
+  retro             Thin retro script          EMSCapitol.svg             Sacramento              Brian J. Bonislawsky, Astigmatic
+  swirly            Swirly looped script       EMSLeague.svg              League Script           Haley Fiege, The League of Moveable Type
+  brush             Brush script               EMSBrush.svg               Alex Brush              Rob Leuschke, TypeSETit
+  modern            Modern semi-joined hand    EMSNeato.svg               Bad Script              Roman Shchyukin, Gaslight
+  clean             Clean modern print         EMSReadability.svg         Source Sans Pro Light   Paul D. Hunt
+  rounded           Rounded friendly print     EMSDelight.svg             Delius                  Natalia Raices
+  marker            Casual marker print        EMSCasualHand.svg          Covered By Your Grace   Kimberly Geswein
+  architect         Architect-style lettering  EMSTech.svg                Architects Daughter     Kimberly Geswein
+  playful           Playful print              EMSPancakes.svg            Short Stack             James Grieshaber, Typeco
+  typewriter        Typewriter-style           EMSNixish.svg              Nixie One               Jovanny Lemonad
+  modernitalic      Modern italic              EMSReadabilityItalic.svg   Source Sans Pro Light   Paul D. Hunt
+  calligraphic      Calligraphic italic        EMSFelix.svg               Felipa                  Fontstage
+  chancery          Chancery-style hand        EMSInvite.svg              Tangerine               Toshi Omagari
+  finescript        Fine calligraphy           EMSSwiss.svg               Italianno               Rob Leuschke, TypeSETit
+  storybook         Storybook                  EMSElfin.svg               Mountains of Christmas  Crystal Kluge, Tart Workshop
+  fairytale         Fairy-tale script          EMSLittlePrincess.svg      Princess Sofia          Crystal Kluge, Tart Workshop
+  deco              Art Deco-style             EMSHerculean.svg           Poiret One              Denis Masharov
+  scifi             Sci-fi lettering           EMSOsmotron.svg            Orbitron                Matt McInerney, The League of Moveable Type
+
+Notes:
+- EMSElfin.svg: its metadata gives the SIL Open Font License; the font it derives from (Mountains of Christmas) is
+  published under the Apache License, Version 2.0. Both licences allow redistribution and modification.
+- The converted EMS font data (device/app/ofl_fonts.h) is a Modified Version of these fonts under the SIL Open Font
+  License 1.1, distributed under that licence, embedded in the Inkling program. It is not offered as a stand-alone
+  font, and it uses none of the original font names.

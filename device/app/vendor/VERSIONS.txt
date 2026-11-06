@@ -1,0 +1,18 @@
+cJSON v1.7.19 from github.com/DaveGamble/cJSON (MIT)
+298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d  cJSON.c
+25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee  cJSON.h
+stb (Sean Barrett), public domain or MIT, your choice (stb-LICENSE), from github.com/nothings/stb at commit
+2c980bb59875b0d32144a71867fbdebb2f77cd20 (2026-08-02), files unchanged: stb_truetype.h v1.26 (text, display.c),
+stb_image.h v2.30 (PNG pictures, display.c), stb_image_write.h v1.16 (page PNGs, brain.c/pages.c; byte-identical to
+the copy vendored earlier).
+ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab  stb_truetype.h
+594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3  stb_image.h
+cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05  stb_image_write.h
+bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63  stb-LICENSE
+Monocypher 4.0.2 from monocypher.org/download/monocypher-4.0.2.tar.gz (sha512 checked against the site's .sha512;
+the four files equal the 4.0.2 tag on github.com/LoupVaillant/Monocypher except the version line), BSD-2-Clause OR
+CC0-1.0 (Monocypher-LICENCE.md). Used for the Ed25519 check of update manifests (update_core.c).
+afe2b098c8569577a84488e0b98d276d1fba6506adea68bb9241a52111734c59  monocypher.c
+f78bb31255cfb7beba66afd2137f5194c8a025cf40488b6cc1e295234d43f374  monocypher.h
+7c9b16056cbd27521919e8a6f56a228808b9e718afc42e3d33f28c08e5abdee2  monocypher-ed25519.c
+bd546edcd468d64e28caa3dbf4b1d6bfad7435c0ce994723fd81aae26405121b  monocypher-ed25519.h

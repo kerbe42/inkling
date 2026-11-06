@@ -12,8 +12,8 @@ computer or server is needed once it's installed.
 
 **[▶ Watch the demo (88 seconds)](../../releases/download/v0.3.0/inkling-demo.mp4)**
 
-Free for personal use. Published by JSSL. This repository holds the downloads and documentation only; the source code
-isn't public.
+Free and open source under the GPL-3.0, published by JSSL. The source code is in this repository: you can read it,
+build it yourself, and check that your build matches the official release byte for byte (see [BUILDING.md](BUILDING.md)).
 
 <p>
 <img src="images/chat.png" alt="Chat: the handwritten question 'Hi! Any tips for a rainy Sunday?' and the AI's handwritten reply underneath" width="200">
@@ -41,6 +41,7 @@ isn't public.
 - [Uninstalling](#uninstalling)
 - [Troubleshooting](#troubleshooting)
 - [Privacy](#privacy)
+- [Building from source](#building-from-source)
 - [Reporting problems](#reporting-problems)
 - [Licence](#licence)
 
@@ -75,7 +76,7 @@ isn't public.
 ## Download and install
 
 1. **Download** `inkling-<version>.zip` from the [latest release](../../releases/latest) and unzip it on your computer.
-   Inside you'll find `README.txt`, `LICENSE.md`, a `documents` folder with `Install Inkling.sh`, and an `inkling`
+   Inside you'll find `README.txt`, `LICENSE.txt`, a `documents` folder with `Install Inkling.sh`, and an `inkling`
    folder (the app and its licences).
 2. **Connect the Kindle** to your computer with the USB cable. It shows up as a drive with a `documents` folder.
 3. **Copy the `inkling` folder** from the zip to the Kindle's main folder, next to `documents`.
@@ -228,18 +229,28 @@ conversation memory. Your notebooks and `config.txt` stay in the `inkling` folde
   the recent conversation. That service's privacy terms apply. Emails go through the email service you set up.
 - **Nothing else leaves the Kindle.** There are no accounts, analytics or tracking; JSSL never receives your pages,
   keys or replies. Inkling contacts GitHub only when you tap Check for updates.
+- **You can check all of this in the source code**, which is in this repository.
+
+## Building from source
+
+[BUILDING.md](BUILDING.md) explains how to build Inkling with Zig, run its tests, and verify an official release: the
+build is reproducible, so building a release's tagged source gives exactly the same app as the one in the download.
 
 ## Reporting problems
 
 Bug reports are welcome: open an issue in this repository's [Issues](../../issues) tab and fill in the bug report
-form. **Never paste API keys, app passwords or tokens** into an issue. This repository doesn't accept pull requests or
-other changes, and the source code isn't public.
+form. **Never paste API keys, app passwords or tokens** into an issue. Ideas and suggested changes are welcome as issues
+too; the project doesn't take pull requests (they're closed automatically).
 
 ## Licence
 
-Inkling is © 2026 JSSL. It's free for personal, non-commercial use under the [Inkling End-User Licence](LICENSE.md):
-you may install and use it on your own Kindle, but you may not redistribute, sell, modify or reverse engineer it. It
-comes with no warranty, and you're responsible for your own AI and email accounts and their costs. Third-party
-components and their licences are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Inkling is © 2026 JSSL and free software under the [GNU General Public License, version 3](LICENSE) (GPL-3.0-only):
+you may use, study, change and share it, and if you share a changed version, you must share its source under the same
+licence. It comes with no warranty. Jailbreaking a Kindle and running software as root is at your own risk, AI replies
+can be wrong, and you're responsible for your own AI and email accounts and their costs. Third-party components and
+their licences are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+The Inkling name and icon identify JSSL's official releases. If you publish a changed version, please give it its own
+name and icon, and its own signing key and releases page ([BUILDING.md](BUILDING.md) explains how).
 
 Kindle and Kindle Scribe are trademarks of Amazon. Inkling isn't made or endorsed by Amazon or by any AI service.
