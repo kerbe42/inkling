@@ -2,18 +2,13 @@
 
 <img src="images/icon.png" alt="Inkling icon" width="150" align="right">
 
-**A notebook that writes back, on a jailbroken Kindle Scribe.** Write with the pen and an AI answers on the page, in
-handwriting, stroke by stroke. Ask it anything, have your notes typed up neatly, get your maths checked, translate,
-or play one of 37 games.
+Inkling turns a jailbroken Kindle Scribe into a notebook that writes back. Write on the page, lift the pen, and a
+couple of seconds later the reply appears underneath in handwriting, drawn stroke by stroke.
 
-Inkling runs entirely on the Kindle and talks directly to the AI service you choose (**Claude**, **OpenAI**,
-**Google Gemini**, **Amazon Bedrock**, **xAI Grok**, **Mistral** or **OpenRouter**) with **your own API key**. No
-computer or server is needed once it's installed.
+**[▶ Watch the demo (88 seconds)](../../releases/download/v0.3.0/inkling-demo.mp4)** ·
+**[Download the latest release](../../releases/latest)**
 
-**[▶ Watch the demo (88 seconds)](../../releases/download/v0.3.0/inkling-demo.mp4)**
-
-Free and open source under the GPL-3.0, published by JSSL. The source code is in this repository: you can read it,
-build it yourself, and check that your build matches the official release byte for byte (see [BUILDING.md](BUILDING.md)).
+Free and open source (GPL-3.0), published by JSSL.
 
 <p>
 <img src="images/chat.png" alt="Chat: the handwritten question 'Hi! Any tips for a rainy Sunday?' and the AI's handwritten reply underneath" width="200">
@@ -30,7 +25,8 @@ build it yourself, and check that your build matches the official release byte f
 
 ## Contents
 
-- [What it does](#what-it-does)
+- [What it can do](#what-it-can-do)
+- [How it works](#how-it-works)
 - [What you need](#what-you-need)
 - [Download and install](#download-and-install)
 - [Add your API key](#add-your-api-key)
@@ -45,27 +41,40 @@ build it yourself, and check that your build matches the official release byte f
 - [Reporting problems](#reporting-problems)
 - [Licence](#licence)
 
-## What it does
+## What it can do
 
-- **Chat**: write anything; the AI writes back under your writing in handwriting, like a pen pal or a diary that
-  answers. 18 everyday voices (friendly, mentor, poetic, Shakespeare...) and 12 fantasy voices (evil wizard, dragon,
-  fairy...).
-- **Type up**: your handwriting turns into neat typed text in place, with headings, lists and tables.
-- **Math**: write a problem or your working; it checks it step by step (hints first, or full solutions).
-- **Translate**: write in any language and it writes it back in the language you choose, in handwriting.
-- **It can draw**: ask it to draw something and, a few seconds after its reply, a detailed line drawing appears
-  stroke by stroke, made by your AI service's most capable model.
-- **Pages**: flick left or right with a finger to turn pages; the conversation carries on across pages.
-- **Games**: 21 board, puzzle and word games the Kindle plays itself (tic-tac-toe, connect four, reversi, sudoku,
-  minesweeper, word search, nonograms, crosswords and more, with Easy/Medium/Hard), plus 16 AI games (I draw you
-  guess, 20 questions, trivia, mystery detective, dungeon quest...).
-- **30 handwriting styles**, from looped cursive to blackletter, and the Kindle's own fonts for typed text.
-- **Your notebook stays on the Kindle**: each page as an image, and the whole conversation as a text file you can
-  copy to your computer.
+- **Chat** about anything, in one of 30 voices, from a friendly pen pal to an evil wizard (18 everyday voices and 12
+  fantasy ones).
+- **Type up** your handwriting into neat text, right on the page, with headings, lists and tables.
+- **Check your math** step by step, with hints or the full working.
+- **Translate** what you write into another language, written back in handwriting.
+- **Draw a picture** when you ask for one: a few seconds after the reply, your AI service's most capable model draws
+  it as line art, stroke by stroke.
+- **Play 21 games** that run on the Kindle itself (tic-tac-toe, connect four, reversi, sudoku, minesweeper, word
+  search, nonograms, crosswords and more, with Easy, Medium and Hard), plus 16 AI games (I draw you guess, 20
+  questions, trivia, mystery detective, dungeon quest...).
+- **Email a page** to yourself, typed up, with a picture of the page attached.
+- **Reply in any of 30 handwriting styles**, from looped cursive to blackletter, or in the Kindle's own fonts for
+  typed text.
+- **Turn pages** with a finger flick. The conversation carries on across pages, and your notebook stays on the Kindle:
+  each page as an image, and the conversation as a text file you can copy to your computer.
+
+## How it works
+
+- Runs on the Kindle and talks straight to the AI service you choose, with no server in between. No computer is
+  needed once it's installed.
+- Bring your own API key: Claude, OpenAI, Google Gemini, Amazon Bedrock, xAI Grok, Mistral or OpenRouter. On
+  Claude's default setting a reply costs under a cent ([AI services and costs](#ai-services-and-costs)).
+- Keys stay in root-only storage, pages only go to your AI service, and there's no analytics ([Privacy](#privacy)).
+- Free and open source (GPL-3.0), with a reproducible build, so you can check the release matches the code
+  ([Building from source](#building-from-source)).
+- Signed updates from inside the app ([Updating](#updating)).
+- Sleep, the cover and the passcode keep working as normal.
 
 ## What you need
 
-1. **A Kindle Scribe** (built and tested on the first-generation Scribe, firmware 5.19.6).
+1. **A Kindle Scribe.** Inkling is tested on the first-generation Scribe, firmware 5.19.6; reports from newer models
+   are welcome (open an issue).
 2. **A jailbroken Kindle** with the community jailbreak's *shell integration* (it lets you open `.sh` files from your
    Library) and root access. See [kindlemodding.org](https://kindlemodding.org); jailbreaking isn't covered here.
    Check that you can see and open `.sh` files in your Library before installing Inkling.
