@@ -15,7 +15,7 @@ typedef struct { int x, y, w, h, kind; char c; } Key;
 
 static struct {
 	int active, secret, show, shift, caps;
-	char title[80], hint[240], key[48], text[320];
+	char title[80], hint[240], key[48], text[400]; /* (keys, addresses, the writer's instructions: AI_INSTR_MAX) */
 	void (*done)(App *a, const char *key, const char *text);
 } kb;
 static Key keys[80];
@@ -69,10 +69,14 @@ static void draw_field(App *a, int refresh) {
 	int x = 70, w = a->W - 140;
 	ui_rrect(a, x, field_y, w, field_h, 26, 0x99);
 	ui_rrect(a, x + 4, field_y + 4, w - 8, field_h - 8, 23, 0xFF);
-	char shown[340];
+	char shown[420];
 	size_t n = strlen(kb.text);
 	if (kb.secret && !kb.show) { size_t i; for (i = 0; i < n && i < sizeof shown - 2; i++) shown[i] = '*'; shown[i] = 0; }
-	else snprintf(shown, sizeof shown, "%s", kb.text);
+	else if (n > 230) { /* long text (instructions): the end, where you type, on the field's four lines */
+		size_t from = n - 230;
+		while (from < n && ((unsigned char)kb.text[from] & 0xC0) == 0x80) from++;
+		snprintf(shown, sizeof shown, "...%s", kb.text + from);
+	} else snprintf(shown, sizeof shown, "%s", kb.text);
 	strncat(shown, "|", sizeof shown - strlen(shown) - 1); /* the cursor */
 	text_draw(a, shown, x + 30, field_y + 24, w - 60, field_h - 40, 40, TXT_REGULAR);
 	char cnt[32];
@@ -118,7 +122,7 @@ void kb_open(App *a, const char *title, const char *hint, const char *key, const
 }
 
 static void finish(App *a, int save) {
-	char text[320], key[48];
+	char text[400], key[48];
 	snprintf(text, sizeof text, "%s", kb.text);
 	snprintf(key, sizeof key, "%s", kb.key);
 	void (*done)(App *, const char *, const char *) = kb.done;

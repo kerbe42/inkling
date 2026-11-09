@@ -31,6 +31,8 @@ Free and open source (GPL-3.0), published by JSSL.
 - [Download and install](#download-and-install)
 - [Add your API key](#add-your-api-key)
 - [AI services and costs](#ai-services-and-costs)
+- [Self-hosted AI servers](#self-hosted-ai-servers)
+- [A different AI for each feature](#a-different-ai-for-each-feature)
 - [Using Inkling](#using-inkling)
 - [Email a page to yourself](#email-a-page-to-yourself)
 - [Updating](#updating)
@@ -64,7 +66,10 @@ Free and open source (GPL-3.0), published by JSSL.
 - Runs on the Kindle and talks straight to the AI service you choose, with no server in between. No computer is
   needed once it's installed.
 - Bring your own API key: Claude, OpenAI, Google Gemini, Amazon Bedrock, xAI Grok, Mistral or OpenRouter. On
-  Claude's default setting a reply costs under a cent ([AI services and costs](#ai-services-and-costs)).
+  Claude's default setting a reply costs under a cent ([AI services and costs](#ai-services-and-costs)). Or use
+  [your own self-hosted AI servers](#self-hosted-ai-servers), and choose a different AI for each feature, with its
+  model, thinking, temperature, reply length and your own instructions
+  ([A different AI for each feature](#a-different-ai-for-each-feature)).
 - Keys stay in root-only storage, pages only go to your AI service, and there's no analytics ([Privacy](#privacy)).
 - Free and open source (GPL-3.0), with a reproducible build, so you can check the release matches the code
   ([Building from source](#building-from-source)).
@@ -117,9 +122,9 @@ doesn't change anything else on the Kindle.
 3. Open **Inkling**. It moves the key into protected storage on the Kindle and **deletes the text file**. The status
    line at the top says which AI it's using.
 
-You can also type or paste a key on the Kindle in **Menu > Settings > AI & keys**, where **Test key** checks it
-without spending anything. Keys for several services can be stored; pick the one to use and its model on the same
-page.
+You can also type or paste a key on the Kindle in **Menu > Settings > AI** (the **AI services** tab), where **Test
+key** checks it without spending anything. Keys for several services can be stored; pick the one to use and its model
+on the same page. To use an AI server of your own instead, see [Self-hosted AI servers](#self-hosted-ai-servers).
 
 ## AI services and costs
 
@@ -136,12 +141,111 @@ instructions and the recent conversation (a few thousand tokens) and gets a few 
 | Mistral | [console.mistral.ai](https://console.mistral.ai) | `mistral-large-4` | under a cent |
 | OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | `google/gemini-3.8-flash` | each model's own price, from prepaid credits |
 
-**Amazon Bedrock** also needs the AWS region your key works in (Settings > AI & keys, or `bedrock_region` in
+**Amazon Bedrock** also needs the AWS region your key works in (Settings > AI, or `bedrock_region` in
 `inkling/config.txt`; default `us-east-1`).
 
 A drawing is made by the service's most capable model and costs a little more than a reply (a few cents with
 Claude). The board and puzzle games run on the Kindle and cost nothing; AI games cost about the same as chatting. **Set a
 monthly spending limit** on your key in the service's dashboard.
+
+## Self-hosted AI servers
+
+Inkling can use AI servers you run or choose yourself, instead of or as well as the services above: any server with
+an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp, vLLM or LiteLLM, or one that speaks Anthropic's
+Messages API or OpenAI's Responses API. A server can also be a cloud service's API with a key used for nothing else,
+such as `https://api.openai.com/v1`.
+
+Set them up in **Menu > Settings > AI**, on the **AI services** tab: tap **Self-hosted**, then **Set it up**. Up to
+three servers can be set up (**+ Server** adds another); each has:
+
+1. **Rename** (top right): what it's called on the Kindle, such as "Home Ollama" or "Work".
+2. **Address**: the API's base address, for example `http://10.0.0.20:11434/v1` for Ollama on a computer at home,
+   or `http://10.0.0.20:1234/v1` for LM Studio. The server must accept connections from the network, not only from
+   its own computer. Clear the address to remove a second or third server.
+3. **Kind of API**: *OpenAI-compatible* for almost every server.
+4. **Key**: only if your server asks for one (cloud APIs always do). Or copy a file into the `inkling` folder:
+   `custom-key.txt` for the first server, `custom2-key.txt` and `custom3-key.txt` for the others.
+5. **Test & list models** asks the server for its models; tap one to use it, or type its name under **Model**.
+6. **Wait for an answer up to**: how long a reply may take before Inkling gives up (3 minutes by default).
+7. **Reply format**: *Auto* (default) finds out what the server can do; *Strict schema*, *JSON only* or *In the
+   prompt* set it by hand.
+
+Then tap the server under **Which AI answers** to use it for everything, or pick it for single features on the **Each
+feature** tab.
+
+Please read these before you rely on one:
+
+- **The model must read images.** Inkling sends a picture of your page; a text-only model can't read your
+  handwriting. Vision models are usually named with `vl`, `vision` or `llava`. Drawings are the exception: they send
+  text only.
+- **Expect slower and less accurate replies than the default services.** Small local models often misread
+  handwriting, slip in maths and draw roughly, and on an ordinary computer a reply can take many seconds.
+- **`http://` is not encrypted.** Your pages (and the key, if any) cross the network readable by anyone on it. Use
+  `http://` only on your own home network; anywhere else use `https://` with a valid certificate (Inkling doesn't
+  accept self-signed ones).
+- **Give the model room.** A request is a few thousand tokens; with Ollama, set a context length of at least 16k
+  (`OLLAMA_CONTEXT_LENGTH=16384`), or long pages get cut off.
+- **Some servers can't hold replies to a JSON schema.** On *Auto*, Inkling finds out by itself: if a server refuses
+  the schema, it asks again with the schema written into the instructions, and remembers that for that server.
+- Inkling can't check what a server does with your pages. Use one you trust.
+
+## A different AI for each feature
+
+Inkling's defaults are chosen and tested for each feature on the Kindle: with Claude, Haiku for chat (quick), Sonnet
+for maths (careful), Opus for drawings (detailed), each with a tuned amount of thinking. On the **Each feature** tab of
+**Menu > Settings > AI**, each feature has its own page: Chat, Type up, Math, Translate, AI games, Drawings and Email
+a page. Each page has two tabs.
+
+**Service & model**
+
+- **AI service**: *Default* (the one that answers everything, chosen on the AI services tab), or any of the AIs set up
+  on the AI services tab: a service you have a key for, or one of your self-hosted servers. A feature uses that AI's
+  key and server settings from the AI services tab; nothing is set up twice.
+- **Model**: *Default* (Inkling's choice for that feature), one from the list (for a server, the models it reported),
+  or **Other** to type any model name.
+
+**Tuning & instructions**
+
+- **Thinking**: *Default*, *Low*, *Medium* or *High*: how much the model thinks before it answers. Amazon Bedrock
+  ignores it.
+- **Temperature**: *Default* (the model's own), 0 (steadiest), 0.5 or 1 (most varied).
+- **Longest reply**: *Default* (16,000 tokens), 2,000, 4,000, 8,000 or 32,000. Lower costs less but can cut a long
+  reply off, which then fails; drawings need the most.
+- **Your instructions**: your own words for the AI, added to Inkling's instructions for that feature, such as "I'm
+  learning algebra, explain each step" for Math or "draw in a cartoon style" for Drawings. **Instructions for every
+  feature** (at the end of the Each feature list) go to all of them, before each feature's own: "I'm 12, keep it
+  simple" or "use British spelling". Up to 360 characters each.
+
+Not every model takes a thinking level or a temperature; if one refuses, Inkling asks again without it. Your
+instructions are added to Inkling's, never instead of them: the rules that lay replies out on the page and keep the
+answer in the format Inkling reads stay in charge, so instructions can change what the AI says but not how it appears.
+
+**Changing these can make Inkling worse, not better.** A bigger model or more thinking can make replies take two or
+three times as long and cost more; a smaller model, a high temperature or a low reply limit makes more mistakes; a
+wrong model name or a model that can't read images stops the feature working. The first time you open a feature's
+page it says so and asks you to confirm. Each feature's page then shows **What to expect** for the choices you made,
+and the status line says so when a reply on your own settings was slow or failed. **Use defaults** (on each feature)
+and **Put every feature back to its default** undo everything, instructions included; they take two taps, so typed
+instructions aren't lost to a slip.
+
+Everything is also in `inkling/config.txt`, one line each, which is easier for long instructions than the Kindle's
+keyboard. Per feature (`chat`, `typeup`, `math`, `translate`, `games`, `drawing`, `email`): `ai_<feature>` (the AI:
+`default`, `anthropic`, `openai`, `gemini`, `bedrock`, `xai`, `mistral`, `openrouter`, or a server: `custom`,
+`custom2`, `custom3`), `ai_<feature>_model`, `ai_<feature>_effort`, `ai_<feature>_temperature`,
+`ai_<feature>_max_tokens` and `ai_<feature>_instructions`, plus `ai_instructions` for every feature. The servers:
+`custom_name`, `custom_url`, `custom_api`, `custom_api_key` (moved into protected storage when the app starts),
+`custom_model`, `custom_json` and `custom_timeout`, and the same as `custom2_...` and `custom3_...`. For example:
+
+```
+custom2_name = Work
+custom2_url = https://ai.example.com/v1
+custom2_model = gpt-6-astra
+ai_math = custom2
+ai_math_effort = high
+ai_math_temperature = 0
+ai_math_instructions = I'm learning algebra: explain each step and name the rule you used.
+ai_instructions = Use British spelling.
+```
 
 ## Using Inkling
 
@@ -167,7 +271,8 @@ the previous page.
 Your page is saved either way, and Inkling opens on the same page next time.
 
 **Settings** (Menu > Settings): voices, reply length and language, handwriting style and size, typed font, translation
-language, maths help, pen and pause timing, AI service and model, and email. The same settings are saved in
+language, maths help, pen and pause timing, AI (services and keys, self-hosted servers, and a different AI, model,
+tuning and instructions for each feature), and email. The same settings are saved in
 `inkling/config.txt`, which you can also edit on a computer. Your notebook is in `inkling/notebooks/` on the Kindle's
 USB storage: the pages as `page-0001.png` and so on, and the conversation as a `.md` text file.
 
@@ -228,14 +333,21 @@ conversation memory. Your notebooks and `config.txt` stay in the `inkling` folde
 - **"... rejected the API key"**: the key is wrong or revoked; make a new one.
 - **"no internet connection?"**: check the Kindle's Wi-Fi, then tap **Send**.
 - **"... is busy or at a usage limit"**: the AI service is overloaded or your spending limit was reached.
+- **"couldn't reach Self-hosted ..."** (or **"... Math's server ..."**) **"is it running?"**: that server is off, its
+  address is wrong, or it only accepts connections from its own computer (Ollama: set `OLLAMA_HOST=0.0.0.0`).
+- **"... can't read images"**: the model on your own server (or the one picked for that feature) is text-only; pick a
+  vision model.
+- **"...'s AI setting failed"** or **"... may be slowing it down"**: a feature's own AI choice didn't work or is slow;
+  open Settings > AI > Each feature and put that feature back to its default.
 - **The screen looks stuck**: press the power button; Inkling closes and the Kindle returns to normal.
 
 ## Privacy
 
 - **Your keys and app password stay on the Kindle**, in a folder only the system can read (not on the USB storage),
   and each is sent only to its own service. If the Kindle is lost, revoke the keys in the services' dashboards.
-- **Your pages go only to the AI service you chose**: when it answers, Inkling sends a picture of the current page and
-  the recent conversation. That service's privacy terms apply. Emails go through the email service you set up.
+- **Your pages go only to the AI service you chose** (or the one picked for that feature; with a self-hosted server,
+  to that server): when it answers, Inkling sends a picture of the current page and the recent
+  conversation. That service's privacy terms apply. Emails go through the email service you set up.
 - **Nothing else leaves the Kindle.** There are no accounts, analytics or tracking; JSSL never receives your pages,
   keys or replies. Inkling contacts GitHub only when you tap Check for updates.
 - **You can check all of this in the source code**, which is in this repository.

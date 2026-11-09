@@ -600,19 +600,21 @@ def t_email(d):
         if mail.get('to') != ['test@example.com'] or mail.get('subject') != 'Shopping list' or 'eggs' not in mail.get('text', '') \
                 or not att.get('filename', '').startswith('page-') or len(att.get('content', '')) < 1000:
             raise Fail(f'the Resend email: { {k: (v if k != "attachments" else "...") for k, v in mail.items()} }')
-    finally:
-        ssh(f'rm -f {SECURE}/fake_email {run}/last_email.json {run}/last_email.eml')
+    finally:  # (auto-reply back on for the tests after this one, which expect it)
+        ssh(f'rm -f {SECURE}/fake_email {run}/last_email.json {run}/last_email.eml; '
+            f'sed -i "s/^pause_seconds = .*/pause_seconds = 2.5/" {USB}/config.txt')
         d.fake('A canned test reply.')
+        restart(d)
 
 
 def kb_type(d, text):
-    """Types on the on-screen keyboard (letters, digits and - _ . @ + / = : ~)."""
+    """Types on the on-screen keyboard (letters, digits, spaces and - _ . @ + / = : ~)."""
     panel = d.hits()[2]
     for ch in text:
         if ch.isupper():
             x, y = panel['kb:Shift']; d.inp(f'pentap {x} {y}'); time.sleep(1.2)
             panel = d.hits()[2]
-        k = f'kb:{ch.lower()}'  # keys are labelled in lower case; Shift makes the next one a capital
+        k = 'kb:space' if ch == ' ' else f'kb:{ch.lower()}'  # keys are labelled in lower case; Shift makes the next one a capital
         if k not in panel:
             raise Fail(f'no key {ch!r} on the keyboard')
         x, y = panel[k]
@@ -649,7 +651,7 @@ def t_keyboard(d):
     # a key field: typing then Cancel changes nothing
     before = ssh('md5sum /var/local/scribe-claude/keys.txt 2>/dev/null', check=False)
     d.tap('< Back', panel_only=True); time.sleep(1.2)
-    d.tap('AI & keys', panel_only=True); time.sleep(1.5)
+    d.tap('AI', panel_only=True); time.sleep(1.5)
     d.tap('ai:anthropic', panel_only=True); time.sleep(1.5)   # show Claude's key box
     d.tap('ai:key', panel_only=True); time.sleep(2)
     kb_type(d, 'abc')
@@ -662,13 +664,17 @@ def t_keyboard(d):
 def t_ai_keys(d):
     d.home()
     menu(d, 'settings'); time.sleep(1.5)
-    d.tap('AI & keys', panel_only=True); time.sleep(2)
+    d.tap('AI', panel_only=True); time.sleep(2)
     panel = d.hits()[2]
-    ids = [k for k in panel if k.startswith('ai:') and k not in ('ai:key', 'ai:test')]
-    if ids != ['ai:anthropic', 'ai:openai', 'ai:gemini', 'ai:bedrock', 'ai:xai', 'ai:mistral', 'ai:openrouter']:
+    if 'ai:tab:services' not in panel or 'ai:tab:features' not in panel:
+        raise Fail(f'no AI services / Each feature tabs: {list(panel)}')
+    ids = [k for k in panel if k.startswith('ai:') and k not in ('ai:key', 'ai:test', 'ai:server-setup', 'ai:tab:services',
+                                                                   'ai:tab:features', 'ai:add-server')]
+    if ids != ['ai:anthropic', 'ai:openai', 'ai:gemini', 'ai:bedrock', 'ai:xai', 'ai:mistral', 'ai:openrouter', 'ai:custom'] or \
+            'ai:add-server' not in panel:
         raise Fail(f'AI services: {ids}')
-    if 'field:key:github_token' not in panel:
-        raise Fail('no GitHub token row')
+    if any('github' in k for k in panel):
+        raise Fail('the GitHub token row is still there')
     d.shot('settings-ai')
     d.mark_now(); d.tap('ai:gemini', panel_only=True); d.expect(r'add a Gemini key below')
     time.sleep(1.5)
@@ -927,6 +933,286 @@ def t_typeup_in_place(d):
     set_mode(d, 'talk'); d.fake('A canned test reply.')
 
 
+# ----------------------------------------------------------------------------- Advanced AI and the own server
+
+def open_ai(d, tab='services'):
+    """Settings > AI, on one of its two tabs (services or features)."""
+    d.home()
+    menu(d, 'settings'); time.sleep(1.5)
+    d.tap('AI', panel_only=True); time.sleep(2)
+    d.tap(f'ai:tab:{tab}', panel_only=True); time.sleep(1.8)
+
+
+def open_feature(d, fid):
+    """Settings > AI > Each feature > that feature (past the one-time warning)."""
+    open_ai(d, 'features')
+    d.tap(f'adv:row:{fid}', panel_only=True); time.sleep(2)
+    if 'adv:ok' in d.hits()[2]:
+        d.tap('adv:ok', panel_only=True); time.sleep(1.5)
+
+
+def last_request():
+    return json.loads(ssh(f'cat {SECURE}/run/last_req.json'))
+
+
+def t_advanced_ai(d):
+    d.home()
+    ssh(f'sed -i "/^ai_advanced *=/d" {USB}/config.txt')  # the warning shows until it has been read once
+    restart(d)
+    open_ai(d, 'features')
+    rows = [k for k in d.hits()[2] if k.startswith('adv:row:')]
+    if rows != ['adv:row:chat', 'adv:row:typeup', 'adv:row:math', 'adv:row:translate', 'adv:row:games', 'adv:row:drawing',
+                'adv:row:email', 'adv:row:all']:
+        raise Fail(f'Each feature rows: {rows}')
+    d.shot('ai-each-feature')
+    d.tap('adv:row:math', panel_only=True); time.sleep(2)
+    panel = d.hits()[2]
+    if 'adv:ok' not in panel or any(k.startswith('adv:svc:') for k in panel):
+        raise Fail(f'the warning did not come first: {list(panel)}')
+    d.shot('adv-warning')
+    d.mark_now(); d.tap('adv:ok', panel_only=True); d.expect(r'each feature can have its own AI')
+    time.sleep(1.5)
+    if d.config('ai_advanced') != 'understood':
+        raise Fail(f'ai_advanced = {d.config("ai_advanced")}')
+    panel = d.hits()[2]
+    missing = [k for k in ('adv:tab:service', 'adv:tab:tuning', 'adv:svc:default', 'adv:svc:anthropic', 'adv:svc:custom',
+                           'adv:model:default', 'adv:model:claude-opus-5-5', 'adv:model:other') if k not in panel]
+    if missing or 'adv:model:fast' in panel:
+        raise Fail(f'Math page: missing {missing}, or the combined "fast" choice listed')
+    d.mark_now(); d.tap('adv:model:claude-opus-5-5', panel_only=True)
+    d.expect(r'setting ai_math = anthropic'); d.expect(r'setting ai_math_model = claude-opus-5-5')
+    d.expect(r'status: Math: Claude Opus 5.5 - .*bigger model', what='the slower-model warning')
+    time.sleep(1.5)
+    d.tap('adv:tab:tuning', panel_only=True); time.sleep(2)
+    panel = d.hits()[2]
+    if not all(k in panel for k in ('adv:effort:high', 'adv:temp:0.5', 'adv:maxtok:8000', 'adv:instr')):
+        raise Fail(f'Tuning tab: {list(panel)}')
+    d.mark_now(); d.tap('adv:effort:high', panel_only=True); d.expect(r'setting ai_math_effort = high')
+    time.sleep(1.5)
+    d.mark_now(); d.tap('adv:temp:0.5', panel_only=True); d.expect(r'setting ai_math_temperature = 0.5')
+    time.sleep(1.5)
+    d.mark_now(); d.tap('adv:maxtok:8000', panel_only=True); d.expect(r'setting ai_math_max_tokens = 8000')
+    time.sleep(1.5)
+    d.tap('adv:instr', panel_only=True); time.sleep(2)
+    kb_type(d, 'explain each step')
+    d.mark_now(); d.tap('kb:Save', panel_only=True); d.expect(r'setting ai_math_instructions: 17 characters')
+    time.sleep(1.5)
+    if d.config('ai_math_instructions') != 'explain each step':
+        raise Fail(f'ai_math_instructions = {d.config("ai_math_instructions")}')
+    if 'adv:reset' not in d.hits()[2]:
+        raise Fail('no reset button on a customised feature')
+    d.shot('adv-math-tuning')
+    d.tap('adv:tab:service', panel_only=True); time.sleep(2)
+    d.shot('adv-math-service')
+    # a maths turn goes to Opus with high thinking; chat stays on the defaults
+    new_page(d)
+    set_mode(d, 'math')
+    d.fake('Check: 2 + 2 = 4.', mode='math', style='typeset')
+    d.inp(scribble()); time.sleep(1.5)
+    d.mark_now(); send_now(d); d.expect(r'turn ok .* mode math', timeout=20); d.wait_idle()
+    req = last_request()
+    if req.get('model') != 'claude-opus-5-5' or req.get('output_config', {}).get('effort') != 'high':
+        raise Fail(f'math request: model {req.get("model")}, output_config {req.get("output_config")}')
+    if 'explain each step' not in req.get('system', '') or 'json_schema' not in json.dumps(req.get('output_config')):
+        raise Fail('math request: the instructions (or the reply schema) are missing')
+    if req.get('temperature') != 0.5 or req.get('max_tokens') != 8000:
+        raise Fail(f'math request: temperature {req.get("temperature")}, max_tokens {req.get("max_tokens")}')
+    set_mode(d, 'talk'); d.fake('A canned test reply.')
+    d.inp(scribble(300, 1400)); time.sleep(1.5)
+    d.mark_now(); send_now(d); d.expect(r'turn ok .* mode talk', timeout=20); d.wait_idle()
+    req = last_request()
+    if req.get('model') == 'claude-opus-5-5' or req.get('output_config', {}).get('effort') != 'low' or \
+            'explain each step' in req.get('system', ''):
+        raise Fail(f'chat request on Math\'s settings: {req.get("model")} {req.get("output_config")}')
+    # back to the defaults
+    open_feature(d, 'math')
+    d.mark_now(); d.tap('adv:reset', panel_only=True); d.expect(r'tap again to put Math back')  # two taps: typed text is at stake
+    time.sleep(1.5)
+    d.mark_now(); d.tap('adv:reset', panel_only=True); d.expect(r'setting ai_math_effort = default')
+    if (d.config('ai_math'), d.config('ai_math_model'), d.config('ai_math_effort'), d.config('ai_math_instructions'),
+            d.config('ai_math_temperature'), d.config('ai_math_max_tokens')) != ('default', 'default', 'default', '', 'default', 'default'):
+        raise Fail('Math was not put back to its default')
+    d.home()
+
+
+class MockAI:
+    """An OpenAI-compatible server on this computer for t_own_server: GET /v1/models, POST /v1/chat/completions. The
+    first chat request that carries response_format is refused (as some local servers do), to exercise the retry."""
+
+    def __init__(self):
+        import http.server, threading
+        mock = self
+        self.requests = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def answer(self, code, obj):
+                b = json.dumps(obj).encode()
+                self.send_response(code)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+
+            def do_GET(self):
+                mock.requests.append(('GET', self.path, dict(self.headers), None))
+                if self.path == '/v1/models':
+                    self.answer(200, {'object': 'list', 'data': [{'id': 'mock-vl', 'object': 'model'}, {'id': 'other', 'object': 'model'}]})
+                else:
+                    self.answer(404, {'error': {'message': 'not found'}})
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or b'{}')
+                mock.requests.append(('POST', self.path, dict(self.headers), body))
+                if self.path != '/v1/chat/completions':
+                    return self.answer(404, {'error': {'message': 'not found'}})
+                if 'response_format' in body:
+                    return self.answer(400, {'error': {'message': 'response_format is not supported by this server'}})
+                m = re.search(r'Mode: (\w+)', json.dumps(body.get('messages', [])))
+                inner = {'read': 'shopping list', 'mode': m.group(1) if m else 'notes', 'style': 'typeset',
+                         'reply': 'Answered by the mock server', 'memo': '', 'illustrate': ''}
+                self.answer(200, {'id': 'mock-1', 'object': 'chat.completion', 'model': body.get('model'),
+                                  'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(inner)},
+                                               'finish_reason': 'stop'}]})
+
+        self.srv = http.server.ThreadingHTTPServer(('0.0.0.0', 0), H)
+        self.port = self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def stop(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+def t_own_server(d):
+    host = ssh('echo $SSH_CLIENT').split()[0]  # this computer, as the Kindle sees it
+    mock = MockAI()
+    try:
+        new_page(d)  # (ink an earlier test left unanswered is answered now, by the canned reply, not by a real service)
+        set_setting(d, 'Pen & timing', 'pause_seconds=2.5')  # the turns here send themselves after the pause
+        d.no_fake()
+        # the first self-hosted server, set up in Settings > AI > AI services
+        open_ai(d, 'services')
+        d.mark_now(); d.tap('ai:custom', panel_only=True); d.expect(r'set up your own server first')
+        time.sleep(1.5)
+        d.tap('ai:server-setup', panel_only=True); time.sleep(2)
+        panel = d.hits()[2]
+        if not all(k in panel for k in ('srv:url', 'srv:key', 'srv:test', 'srv:model', 'srv:api:openai', 'srv:wait:300',
+                                        'srv:json:auto', 'srv:name')):
+            raise Fail(f'server page: {list(panel)}')
+        d.shot('ai-server-empty')
+        d.tap('srv:url', panel_only=True); time.sleep(2)
+        kb_type(d, f'{host}:{mock.port}/v1')  # (the field starts with http://)
+        d.mark_now(); d.tap('kb:Save', panel_only=True)
+        d.expect(rf'setting custom_url = http://{re.escape(host)}:{mock.port}/v1')
+        d.expect(r"http:// isn't encrypted", what='the http warning')
+        d.expect(r'Self-hosted answers: 2 models - pick one below', timeout=30, what='the model list')
+        time.sleep(2)
+        gets = [r for r in mock.requests if r[0] == 'GET']
+        if not gets or gets[-1][1] != '/v1/models' or 'Authorization' in gets[-1][2]:
+            raise Fail(f'model list request: {gets}')
+        d.mark_now(); d.tap('srv:pick:mock-vl', panel_only=True); d.expect(r'setting custom_model = mock-vl')
+        time.sleep(1.5)
+        d.mark_now(); d.tap('srv:wait:60', panel_only=True); d.expect(r'setting custom_timeout = 60')
+        time.sleep(1.5)
+        d.shot('ai-server-set')
+        # a second server (here the same mock, with a key), named
+        d.tap('< Back', panel_only=True); time.sleep(2)
+        if 'ai:add-server' not in d.hits()[2]:
+            raise Fail('Back did not return to AI services, or no + Server')
+        d.tap('ai:add-server', panel_only=True); time.sleep(2)
+        d.tap('srv:name', panel_only=True); time.sleep(2)
+        x, y = d.hits()[2]['kb:Clear']; d.inp(f'pentap {x} {y}'); time.sleep(0.8)
+        kb_type(d, 'Work')
+        d.mark_now(); d.tap('kb:Save', panel_only=True); d.expect(r'setting custom2_name = Work')
+        time.sleep(1.5)
+        d.tap('srv:url', panel_only=True); time.sleep(2)
+        kb_type(d, f'{host}:{mock.port}/v1')
+        d.mark_now(); d.tap('kb:Save', panel_only=True)
+        d.expect(rf'setting custom2_url = http://{re.escape(host)}:{mock.port}/v1')
+        d.expect(r'Work answers', timeout=30); time.sleep(2)
+        d.mark_now(); d.tap('srv:pick:mock-vl', panel_only=True); d.expect(r'setting custom2_model = mock-vl')
+        time.sleep(1.5)
+        d.tap('srv:key', panel_only=True); time.sleep(2)
+        kb_type(d, 'workkey123')
+        d.mark_now(); d.tap('kb:Save', panel_only=True); d.expect(r'setting custom2_api_key: saved')
+        d.expect(r'Work answers', timeout=30); time.sleep(2)
+        if mock.requests[-1][2].get('Authorization') != 'Bearer workkey123':
+            raise Fail('the second server\'s key was not sent with its model list request')
+        d.shot('ai-server-2')
+        d.tap('< Back', panel_only=True); time.sleep(2)
+        if 'ai:custom2' not in d.hits()[2]:
+            raise Fail('the second server is not among the AI services')
+        d.shot('ai-services-two-servers')
+        # Type up on the first server (keyless), Translate on the second (its key)
+        open_feature(d, 'typeup')
+        d.mark_now(); d.tap('adv:svc:custom', panel_only=True); d.expect(r'setting ai_typeup = custom')
+        d.expect(r'Self-hosted \(your server\)', what='the self-hosted warning')
+        time.sleep(1.5)
+        d.shot('adv-typeup-server')
+        open_feature(d, 'translate')
+        d.mark_now(); d.tap('adv:svc:custom2', panel_only=True); d.expect(r'setting ai_translate = custom2')
+        time.sleep(1.5)
+        if 'adv:server-settings' not in d.hits()[2]:
+            raise Fail('no server settings button for the chosen server')
+        # a Type up turn over plain http to the mock: refused schema, asked again without it, answered. The turns here
+        # send by themselves after the pause (early sending starts 0.8 s after the pen lifts; tapping Send on top of it
+        # would drop that answer and ask again)
+        new_page(d)
+        set_mode(d, 'notes')
+        mock.requests.clear()
+        d.mark_now()
+        d.inp('penstroke 1100 900 1700 900\nwait 30\npenstroke 1100 960 1700 950')
+        try:
+            d.expect(r"the server didn't take the reply schema", timeout=30)
+        except Fail:  # what was the app doing? (a request in flight, the state, what the mock saw)
+            print('DIAG curl:', ssh('pidof curl; ls -la /var/local/scribe-claude/run/', check=False).strip())
+            print('DIAG state:', d.hits()[0])
+            print('DIAG mock:', [(r[0], r[1]) for r in mock.requests])
+            raise
+        d.expect(r'turn ok .* mode notes', timeout=60); d.wait_idle()
+        posts = [r for r in mock.requests if r[0] == 'POST']
+        if len(posts) != 2 or 'response_format' not in posts[0][3] or 'response_format' in posts[1][3] or \
+                any('Authorization' in p[2] for p in posts):
+            raise Fail(f'type up requests: {[("response_format" in p[3], p[2].get("Authorization")) for p in posts]}')
+        msgs = posts[1][3]['messages']
+        if posts[1][3].get('model') != 'mock-vl' or 'JSON Schema' not in msgs[0]['content'] or \
+                not str(msgs[-1]['content']).count('data:image/png;base64,'):
+            raise Fail('the retried request: model, schema in the instructions or page image missing')
+        d.shot('adv-typeup-server-reply')
+        # the next one starts without the schema (one request)
+        mock.requests.clear()
+        d.mark_now()
+        d.inp('penstroke 1100 1500 1700 1500')
+        d.expect(r'turn ok .* mode notes', timeout=60); d.wait_idle()
+        if len([r for r in mock.requests if r[0] == 'POST']) != 1:
+            raise Fail('the server\'s answer about the schema was not remembered')
+        # Translate goes to the second server with its key (it learns the reply format on its own)
+        new_page(d)
+        set_mode(d, 'translate')
+        mock.requests.clear()
+        d.mark_now()
+        d.inp('penstroke 300 900 900 900')
+        d.expect(r'turn ok .* mode translate', timeout=60); d.wait_idle()
+        posts = [r for r in mock.requests if r[0] == 'POST']
+        if len(posts) != 2 or any(p[2].get('Authorization') != 'Bearer workkey123' or p[3].get('model') != 'mock-vl' for p in posts):
+            raise Fail(f'translate requests: {[(p[2].get("Authorization"), p[3].get("model")) for p in posts]}')
+        # a stopped server is named
+        mock.stop()
+        mock = None
+        set_mode(d, 'notes')
+        d.mark_now()
+        d.inp('penstroke 1100 1800 1700 1800')
+        d.expect(r"couldn't reach Self-hosted .* is it running", timeout=40)
+        set_mode(d, 'talk')
+    finally:
+        if mock:
+            mock.stop()
+        d.fake('A canned test reply.')
+
+
 # ----------------------------------------------------------------------------- real AI (costs a few cents)
 
 def t_real_ai(d):
@@ -1016,7 +1302,7 @@ TESTS = [t_pen_menu_close, t_pen_bounce, t_finger_with_pen_near, t_palm_plus_fin
          t_menu_while_writing_reply, t_menu_while_thinking, t_page_menu, t_translate, t_settings, t_games_local,
          t_games_picker, t_games_ai, t_levels, t_eraser_and_page_memory, t_early_send, t_clear_button, t_pen_keeps_up, t_scratch_out,
          t_typeup_in_place,
-         t_wordsearch_resume, t_email, t_keyboard, t_ai_keys, t_update_check, t_exit_and_power]
+         t_wordsearch_resume, t_email, t_keyboard, t_ai_keys, t_advanced_ai, t_own_server, t_update_check, t_exit_and_power]
 
 
 def main():

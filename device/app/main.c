@@ -293,10 +293,11 @@ void app_key_check(App *a, const char *provider) {
 	if (!p) return;
 	if (net_busy()) { ui_set_status(a, "busy - test the key again in a moment"); return; }
 	KeyCheck *j = brain_key_check_prepare(a, provider, key_get(p->key_name));
-	if (!j) { ui_set_status(a, "no %s key to test", p->short_name); return; }
+	if (!j) { ui_set_status(a, p->custom ? "enter the server's address first" : "no %s key to test", p->short_name); return; }
 	if (net_submit_fn(brain_key_check_run, j, K_KEYCHECK) != 0) { brain_key_check_free(j); ui_set_status(a, "busy - try again"); return; }
 	keycheck_job = j;
-	ui_set_status(a, "checking the %s key...", p->short_name);
+	if (p->custom) ui_set_status(a, "asking %s for its models...", p->short_name);
+	else ui_set_status(a, "checking the %s key...", p->short_name);
 }
 
 void app_dropdown_action(App *a, int kind, const char *id) {
@@ -958,8 +959,11 @@ static void apply_answer(App *a, AiJob *job, Reply *r) {
 		for (int i = 0; i < a->nmodes; i++)
 			if (!strcmp(a->mode_id[i], r->mode) && strcmp(a->mode_id[a->mode], "auto")) { a->mode = i; ui_draw_bar(a); }
 	layout_reply(a, r);
-	double now = mono_ms();
-	ui_set_status(a, "answered in %.1f s (%s)", (now - (pen_up_t > 0 && pen_up_t < turn_started ? pen_up_t : turn_started)) / 1000, r->mode);
+	double now = mono_ms(), took = (now - (pen_up_t > 0 && pen_up_t < turn_started ? pen_up_t : turn_started)) / 1000;
+	const char *adv = brain_job_custom_feature(job);
+	if (adv && took > 8) /* a slow answer on Advanced AI settings: say where the time may have gone */
+		ui_set_status(a, "answered in %.1f s - your AI settings for %s may be slowing it down (Settings > AI)", took, adv);
+	else ui_set_status(a, "answered in %.1f s (%s)", took, r->mode);
 	logf_("turn ok in %.1f s, mode %s, style %s, %d ops; on the page %.1f s after the pen lifted", (now - turn_started) / 1000,
 	      r->mode, r->style, a->nops, pen_up_t > 0 ? (now - pen_up_t) / 1000 : 0);
 	if (r->illustrate[0]) start_draw(a, r->illustrate, 0);
@@ -1000,10 +1004,11 @@ static void handle_result(App *a) {
 	} else if (kind == K_KEYCHECK) {
 		char msg[200] = "";
 		int ok = keycheck_job ? brain_key_check_result(keycheck_job, st, body, len, msg, sizeof msg) : 0;
-		ui_set_status(a, "%s", msg[0] ? msg : ok ? "the key works" : "the key didn't work");
 		logf_("key check: %s", ok ? "works" : "failed");
 		brain_key_check_free(keycheck_job);
 		keycheck_job = NULL;
+		if (a->in_settings) settings_refresh(a); /* (the own server's models appear as choices) */
+		ui_set_status(a, "%s", msg[0] ? msg : ok ? "the key works" : "the key didn't work");
 	} else if (kind == UPDATE_NET_KIND) {
 		update_result(a, st, body);
 	} else if (kind == K_DRAW) {

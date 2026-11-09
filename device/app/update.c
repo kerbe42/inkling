@@ -1,8 +1,8 @@
 /* Menu > Check for updates. The first tap asks GitHub for the latest release (in the network worker, so the page stays
  * usable); if it is newer and its signed manifest checks out, the second tap downloads the bundle, verifies it,
  * installs it (update_core.c) and the app exits with UPDATE_EXIT_CODE so launch.sh starts the new version. Any failure
- * leaves the running install as it was. The repo is config.txt's update_repo (default below); a private repo needs a
- * read-only token in the key store (github_token, or a file github-token.txt in the inkling folder). */
+ * leaves the running install as it was. The repo is config.txt's update_repo (default below). The repository is public,
+ * so no GitHub token is used (one stored by an older version, github_token, is deleted). */
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,7 +18,7 @@
 
 #define UPDATE_STAGE "/var/local/scribe/update"
 #define UPDATE_DEFAULT_REPO "kerbe42/inkling"
-#define TOKEN_DROP USB_DIR "/github-token.txt"
+#define OLD_TOKEN_DROP USB_DIR "/github-token.txt" /* (older versions took a token from here) */
 
 enum { U_IDLE, U_CHECKING, U_LATEST, U_AVAILABLE, U_USB, U_INSTALLING, U_FAILED, U_DONE };
 static UpdCtx ctx; /* the worker's while a job runs (net_busy) */
@@ -55,11 +55,6 @@ static int valid_repo(const char *s) {
 	return name_chars(s, (size_t)(sl - s), "-_.") && name_chars(sl + 1, strlen(sl + 1), "-_.");
 }
 
-static int valid_token(const char *t) {
-	size_t n = strlen(t);
-	return n >= 10 && n < sizeof ctx.token && name_chars(t, n, "-_.");
-}
-
 static void trim(char *s) {
 	size_t n = strlen(s);
 	while (n && (s[n - 1] == '\n' || s[n - 1] == '\r' || s[n - 1] == ' ' || s[n - 1] == '\t')) s[--n] = 0;
@@ -88,29 +83,21 @@ static void read_repo(char *out, size_t n) {
 	fclose(f);
 }
 
-/* A token copied over USB as github-token.txt goes into the key store, and the file is deleted ("delete" removes it). */
-static void import_token_file(App *a) {
-	int fd = open(TOKEN_DROP, O_RDONLY | O_NOFOLLOW);
-	if (fd < 0) return;
-	char t[400] = { 0 };
-	ssize_t r = read(fd, t, sizeof t - 1);
-	close(fd);
-	unlink(TOKEN_DROP);
-	t[r > 0 ? r : 0] = 0;
-	trim(t);
-	if (!strcmp(t, "delete")) { key_set("github_token", ""); ui_set_status(a, "GitHub token removed"); }
-	else if (valid_token(t)) { key_set("github_token", t); logf_("update: GitHub token saved from github-token.txt"); }
-	else ui_set_status(a, "github-token.txt didn't hold a token - not saved");
-	memset(t, 0, sizeof t);
+/* The repository is public now: a GitHub token kept by an older version (key store, or a file still waiting on the USB
+ * storage) isn't needed any more, so it is deleted rather than left lying around. */
+static void forget_old_token(void) {
+	if (unlink(OLD_TOKEN_DROP) == 0) logf_("update: deleted an old github-token.txt (not needed: the repository is public)");
+	if (key_get("github_token")[0]) {
+		key_set("github_token", "");
+		logf_("update: deleted the stored GitHub token (not needed: the repository is public)");
+	}
 }
 
 static void fill_ctx(void) {
 	snprintf(ctx.curl, sizeof ctx.curl, "/usr/bin/curl");
 	snprintf(ctx.api, sizeof ctx.api, "https://api.github.com");
 	read_repo(ctx.repo, sizeof ctx.repo);
-	const char *t = key_get("github_token");
-	if (t[0] && !valid_token(t)) logf_("update: the stored github_token has unexpected characters, not using it");
-	snprintf(ctx.token, sizeof ctx.token, "%s", valid_token(t) ? t : "");
+	ctx.token[0] = 0;
 	snprintf(ctx.current, sizeof ctx.current, "%s", SCRIBE_VERSION);
 	snprintf(ctx.stage, sizeof ctx.stage, "%s", UPDATE_STAGE);
 	upd_hex_decode(UPDATE_PUBKEY_HEX, ctx.pubkey, 32);
@@ -124,7 +111,7 @@ void update_tap(App *a) {
 	}
 	if (ustate == U_DONE) return;
 	if (net_busy()) { ui_set_status(a, "Busy with another request - tap again in a moment"); return; }
-	import_token_file(a);
+	forget_old_token();
 	fill_ctx();
 	int install = ustate == U_AVAILABLE;
 	if (net_submit_fn(install ? job_install : job_check, &ctx, UPDATE_NET_KIND) != 0) {

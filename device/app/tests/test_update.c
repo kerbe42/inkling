@@ -634,7 +634,7 @@ static void test_flow(void) {
 	make_release("0.3.0", "0.2.0", SK, 1);
 	snprintf(p, sizeof p, "%s/latest.status", fake), puts_(p, "404");
 	ctx_reset("");
-	CHECK(upd_check(&C) == UPD_ERR && strstr(C.msg, "private repo needs a GitHub token"));
+	CHECK(upd_check(&C) == UPD_ERR && strstr(C.msg, "no release found in"));
 	ctx_reset("github_pat_TESTONLY0123456789");
 	CHECK(upd_check(&C) == UPD_ERR && strstr(C.msg, "token can't read it"));
 	puts_(p, "403");

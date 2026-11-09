@@ -871,7 +871,7 @@ int upd_check(UpdCtx *c) {
 	logf_("update: %s -> %d", url, st);
 	if (st < 0) return fail(c, "no connection to GitHub - is Wi-Fi on? (%d)", st);
 	if (st == 404 && c->token[0]) return fail(c, "no release found in %s (or the token can't read it)", c->repo);
-	if (st == 404) return fail(c, "no release found in %s - a private repo needs a GitHub token (see README)", c->repo);
+	if (st == 404) return fail(c, "no release found in %s", c->repo);
 	if (st == 401) return fail(c, "GitHub rejected the token - check github_token");
 	if (st == 403 || st == 429) return fail(c, "GitHub is limiting requests (%d) - try again later", st);
 	if (st != 200) return fail(c, "GitHub answered %d", st);

@@ -291,8 +291,10 @@ void hits_note(const char *label, int x, int y, int w, int h) {
 void hits_dump(App *a, const char *path) {
 	FILE *f = fopen(path, "w");
 	if (!f) return;
-	fprintf(f, "state menu=%d settings=%d settings_page=%d games=%d pagemenu=%d modes=%d page=%d last_page=%d mode=%s nops=%d\n",
-		a->in_menu, a->in_settings, a->settings_page, a->in_games, a->in_pagemenu, a->in_modes, a->page, a->last_page, a->mode_id[a->mode], a->nops);
+	fprintf(f, "state menu=%d settings=%d settings_page=%d games=%d pagemenu=%d modes=%d page=%d last_page=%d mode=%s nops=%d "
+		   "npending=%d cur=%d autosend_in=%d netbusy=%d\n",
+		a->in_menu, a->in_settings, a->settings_page, a->in_games, a->in_pagemenu, a->in_modes, a->page, a->last_page, a->mode_id[a->mode], a->nops,
+		a->npending, a->cur_active, a->autosend_at > 0 ? (int)(a->autosend_at - mono_ms()) : -1, net_busy());
 	for (int i = 0; i < a->nbuttons; i++)
 		fprintf(f, "bar\t%s\t%d %d %d %d\n", a->buttons[i].text, a->buttons[i].x, a->buttons[i].y, a->buttons[i].w, a->buttons[i].h);
 	if (a->in_menu || a->in_settings || a->in_games == 1 || a->in_pagemenu || a->in_modes)
