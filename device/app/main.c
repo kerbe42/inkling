@@ -31,7 +31,7 @@ static double turn_started, last_tick;
 static AiJob *ai_job, *email_job, *draw_job;
 /* the drawing pass: what it draws, for which page, and a finished drawing waiting for you to be back on the page */
 static char draw_desc[480];
-static int draw_page, have_drawn;
+static int draw_page, have_drawn, draw_cancelled;
 static double draw_started;
 static Reply drawn;
 static KeyCheck *keycheck_job;
@@ -131,6 +131,13 @@ static void send_turn(App *a) {
 	AiJob *j = brain_prepare(a);
 	int early = !send_requested && mono_ms() < answer_not_before;
 	if (net_submit_fn(brain_run, j, K_AI) == 0) {
+		/* a picture still being drawn for a page you've left would be dropped when it came: stop it, so a server
+		 * that answers one request at a time (most self-hosted ones) takes this turn now */
+		if (draw_job && a->page != draw_page && !draw_cancelled) {
+			draw_cancelled = 1;
+			brain_cancel_draw();
+			logf_("drawing cancelled: you're writing on another page");
+		}
 		ai_job = j;
 		sent_count = a->npending;
 		turn_inflight = 1;
@@ -930,6 +937,7 @@ static void start_draw(App *a, const char *desc, int own) {
 	if (net_submit_lane(1, brain_draw_run, j, K_DRAW) != 0) { brain_job_free(j); return; }
 	draw_job = j;
 	draw_page = a->page;
+	draw_cancelled = 0;
 	if (!own) draw_started = mono_ms();
 	if (desc != draw_desc) snprintf(draw_desc, sizeof draw_desc, "%s", desc);
 	ui_set_status(a, "drawing it...");
@@ -1015,13 +1023,17 @@ static void handle_result(App *a) {
 		Reply r = { 0 };
 		int ok = draw_job && brain_parse_draw(draw_job, st, body, len, &r);
 		int own = brain_draw_is_own(draw_job);
+		char why[200];
+		int slow = !ok && brain_draw_fail_msg(draw_job, st, why, sizeof why);
 		brain_job_free(draw_job);
 		draw_job = NULL;
 		if (ok) {
 			if (have_drawn) { free(drawn.slen); free(drawn.dpts); }
 			drawn = r;
 			have_drawn = 1; /* shown from the main loop once you're on the page */
-		} else if (!own && a->page == draw_page) start_draw(a, draw_desc, 1); /* once more with your own model */
+		} else if (draw_cancelled) logf_("drawing stopped");
+		else if (!own && a->page == draw_page) start_draw(a, draw_desc, 1); /* once more with your own model */
+		else if (slow) ui_set_status(a, "%s", why);
 		else ui_set_status(a, "couldn't draw it this time - ask again?");
 	} else if (kind == K_EMAIL) {
 		cJSON *r = body ? cJSON_Parse(body) : NULL;

@@ -357,6 +357,8 @@ AiJob *brain_prepare_draw(App *a, const char *desc, int own);
 int brain_draw_run(void *job, char **body, size_t *len); /* JobFn */
 int brain_parse_draw(AiJob *j, int status, const char *body, size_t len, Reply *out);
 int brain_draw_is_own(AiJob *j);
+void brain_cancel_draw(void); /* stops the drawing in flight (its answer comes back as an error) */
+int brain_draw_fail_msg(AiJob *j, int status, char *msg, size_t n);
 /* After a reply: the feature's label if it ran on Advanced AI settings (for a hint when it was slow), else NULL. */
 const char *brain_job_custom_feature(AiJob *j);
 void brain_cancel(void); /* stop the request in flight */

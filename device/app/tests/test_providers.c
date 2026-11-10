@@ -759,6 +759,11 @@ int main(int argc, char **argv) {
 		      !strcmp(at_s(r, "model"), "qwen3-vl:8b"), "own server request");
 		cJSON_Delete(r);
 		free(req);
+		{
+			char why[200] = "";
+			CHECK(brain_draw_fail_msg(j, -1028, why, sizeof why) && strstr(why, "Desk PC took over 600 s to draw it") &&
+			      !brain_draw_fail_msg(j, -1007, why, sizeof why), "drawing timeout on the own server named: %s", why);
+		}
 		brain_config_apply(&app, "ai_typeup_effort", "low");
 		job_route(&app, j, FEAT_TYPEUP);
 		j->json_mode = 0;
@@ -768,7 +773,26 @@ int main(int argc, char **argv) {
 		      "own server: effort when set; prompt-only schema");
 		cJSON_Delete(r);
 		free(req);
+		/* Thinking off: "none" in the OpenAI words; named in the notes */
+		CHECK(brain_config_apply(&app, "ai_typeup_effort", "off") && !strcmp(app.feat_effort[FEAT_TYPEUP], "off"), "effort off kept");
+		job_route(&app, j, FEAT_TYPEUP);
+		req = build_request(j, "iVBORw0KGgoAAAANSUhEUg==");
+		r = cJSON_Parse(req);
+		CHECK(j->effort_set && !strcmp(at_s(r, "reasoning_effort"), "none"), "own server: thinking off sent as reasoning_effort none");
+		cJSON_Delete(r);
+		free(req);
+		brain_route_notes(&app, FEAT_TYPEUP, notes, sizeof notes);
+		CHECK(strstr(notes, "Thinking off: the quickest replies") && !strstr(notes, "Many local models think"), "off notes: %s", notes);
 		brain_config_apply(&app, "ai_typeup_effort", "");
+		brain_route_notes(&app, FEAT_TYPEUP, notes, sizeof notes);
+		CHECK(strstr(notes, "Many local models think before they answer"), "own server, thinking left to the model: %s", notes);
+		/* Off on a cloud service: ignored there, and said so */
+		brain_config_apply(&app, "ai_chat_effort", "off");
+		brain_route(&app, FEAT_CHAT, &rt);
+		brain_route_notes(&app, FEAT_CHAT, notes, sizeof notes);
+		CHECK(!rt.p->custom && !rt.effort_set && strcmp(rt.effort, "off") && strstr(notes, "Thinking off is for self-hosted servers"),
+		      "off elsewhere ignored: %s / %s", rt.effort, notes);
+		brain_config_apply(&app, "ai_chat_effort", "");
 		/* an Anthropic-style server: its own address, no Anthropic-only extras */
 		brain_config_apply(&app, "custom_api", "anthropic");
 		key_set("custom_api_key", "sk-local");
@@ -782,10 +806,27 @@ int main(int argc, char **argv) {
 		CHECK(at(r, "output_config.format.schema") && !at(r, "output_config.effort") && !at(r, "fallbacks"), "anthropic-style server request");
 		cJSON_Delete(r);
 		free(req);
+		brain_config_apply(&app, "ai_typeup_effort", "off");
+		job_route(&app, j, FEAT_TYPEUP);
+		snprintf(j->model, sizeof j->model, "claude-opus-5-5");
+		req = build_request(j, "iVBORw0KGgoAAAANSUhEUg==");
+		r = cJSON_Parse(req);
+		CHECK(!strcmp(at_s(r, "thinking.type"), "disabled") && !at(r, "output_config.effort"), "anthropic-style server: thinking off = disabled");
+		cJSON_Delete(r);
+		free(req);
+		brain_config_apply(&app, "ai_typeup_effort", "");
 		brain_config_apply(&app, "custom_api", "responses");
 		job_route(&app, j, FEAT_TYPEUP);
 		request_target(j, url, sizeof url, hdr, sizeof hdr);
 		CHECK(!strcmp(url, "http://10.0.0.20:11434/v1/responses") && strstr(hdr, "Authorization: Bearer sk-local"), "responses-style server");
+		brain_config_apply(&app, "ai_typeup_effort", "off");
+		job_route(&app, j, FEAT_TYPEUP);
+		req = build_request(j, "iVBORw0KGgoAAAANSUhEUg==");
+		r = cJSON_Parse(req);
+		CHECK(!strcmp(at_s(r, "reasoning.effort"), "none"), "responses-style server: thinking off = effort none");
+		cJSON_Delete(r);
+		free(req);
+		brain_config_apply(&app, "ai_typeup_effort", "");
 		brain_config_apply(&app, "custom_api", "openai");
 		key_set("custom_api_key", "");
 		brain_job_free(j);

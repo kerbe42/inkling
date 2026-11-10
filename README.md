@@ -183,6 +183,13 @@ Please read these before you rely on one:
 - **`http://` is not encrypted.** Your pages (and the key, if any) cross the network readable by anyone on it. Use
   `http://` only on your own home network; anywhere else use `https://` with a valid certificate (Inkling doesn't
   accept self-signed ones).
+- **Drawings are the hardest job.** A drawing is a long list of pen strokes, and small local models often can't
+  finish one within a few minutes (or at all). If yours can't, give **Drawings** to a cloud service on the **Each
+  feature** tab and keep the rest on your server.
+- **Turn thinking off for quick replies.** Many local models think before they answer, which on an ordinary computer
+  can add 10 to 20 seconds to every reply. On a feature's **Tuning & instructions** tab, **Thinking: Off** (offered
+  only for self-hosted servers) asks the model to answer straight away. Off makes maths and drawings less careful,
+  so you might keep thinking on for those and turn it off for chat.
 - **Give the model room.** A request is a few thousand tokens; with Ollama, set a context length of at least 16k
   (`OLLAMA_CONTEXT_LENGTH=16384`), or long pages get cut off.
 - **Some servers can't hold replies to a JSON schema.** On *Auto*, Inkling finds out by itself: if a server refuses
@@ -206,8 +213,8 @@ a page. Each page has two tabs.
 
 **Tuning & instructions**
 
-- **Thinking**: *Default*, *Low*, *Medium* or *High*: how much the model thinks before it answers. Amazon Bedrock
-  ignores it.
+- **Thinking**: *Default*, *Low*, *Medium* or *High*: how much the model thinks before it answers. On a self-hosted
+  server there's also *Off*, the quickest. Amazon Bedrock ignores it.
 - **Temperature**: *Default* (the model's own), 0 (steadiest), 0.5 or 1 (most varied).
 - **Longest reply**: *Default* (16,000 tokens), 2,000, 4,000, 8,000 or 32,000. Lower costs less but can cut a long
   reply off, which then fails; drawings need the most.

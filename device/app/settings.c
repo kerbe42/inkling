@@ -503,6 +503,7 @@ static const char *APIS[] = { "openai", "anthropic", "responses" };
 static const char *API_LABEL[] = { "OpenAI-compatible", "Anthropic-compatible", "OpenAI Responses" };
 static const char *API_SUB[] = { "most servers", "Messages API", "Responses API" };
 static const char *EFFORTS[] = { "", "low", "medium", "high" };
+static const char *EFFORTS_OWN[] = { "", "off", "low", "medium", "high" }; /* a self-hosted server: also Off */
 
 static void hit(int kind, int x, int y, int w, int h, int set, const char *label) {
 	if (nhits < 200) hits[nhits++] = (Hit){ kind, x, y, w, h, set, 0 };
@@ -833,13 +834,22 @@ static int draw_adv_feature(App *a, int f, int y) {
 	Route d;
 	default_route(a, f, &d);
 	{
-		const char *labels[4] = { "Default", "Low", "Medium", "High" }, *subs[4], *ids[4] = { "default", "low", "medium", "high" };
-		subs[0] = p && (p->prov == PROV_ANTHROPIC || p->prov == PROV_GEMINI) ? brain_default_effort(f) : "model decides";
-		subs[1] = "quicker"; subs[2] = ""; subs[3] = "slower";
+		int own = p && p->custom, ne = own ? 5 : 4;
+		const char **E = own ? EFFORTS_OWN : EFFORTS, *labels[5], *subs[5], *ids[5];
+		for (int i = 0; i < ne; i++) {
+			const char *e = E[i];
+			ids[i] = e[0] ? e : "default";
+			labels[i] = !e[0] ? "Default" : !strcmp(e, "off") ? "Off" : !strcmp(e, "low") ? "Low" : !strcmp(e, "medium") ? "Medium" : "High";
+			subs[i] = !e[0] ? (p && (p->prov == PROV_ANTHROPIC || p->prov == PROV_GEMINI) ? brain_default_effort(f) : "model decides") :
+				  !strcmp(e, "off") ? "quickest" : !strcmp(e, "low") ? "quicker" : !strcmp(e, "high") ? "slower" : "";
+		}
 		int sel = 0;
-		for (int i = 1; i < 4; i++) if (!strcmp(a->feat_effort[f], EFFORTS[i])) sel = i;
-		y = chip_row(a, "Thinking", takes ? "How much the model thinks before it answers." : "Bedrock doesn't take a thinking level.",
-			     4, labels, subs, sel, takes, HIT_ADV_EFFORT, "adv:effort:", ids, y);
+		for (int i = 1; i < ne; i++) if (!strcmp(a->feat_effort[f], E[i])) sel = i;
+		if (a->feat_effort[f][0] && !sel) sel = -1; /* Off, kept from a self-hosted server: none of these chips */
+		y = chip_row(a, "Thinking", !takes ? "Bedrock doesn't take a thinking level." :
+			     own ? "How much the model thinks before it answers. Off is quickest on most local models." :
+			     "How much the model thinks before it answers.",
+			     ne, labels, subs, sel, takes, HIT_ADV_EFFORT, "adv:effort:", ids, y);
 	}
 	{
 		const char *ids[4] = { "default", "0", "0.5", "1" };
@@ -1204,7 +1214,9 @@ static int adv_tap(App *a, Hit *t) {
 		Route r;
 		brain_route(a, f, &r);
 		if (r.p && r.p->api == API_BEDROCK) { ui_set_status(a, "Bedrock doesn't take a thinking level"); return 1; }
-		adv_set(a, f, "_effort", EFFORTS[t->set]);
+		int own = r.p && r.p->custom;
+		if (t->set < 0 || t->set >= (own ? 5 : 4)) return 1;
+		adv_set(a, f, "_effort", own ? EFFORTS_OWN[t->set] : EFFORTS[t->set]);
 		adv_status(a, f);
 		draw(a, &a->gc16);
 		return 1;

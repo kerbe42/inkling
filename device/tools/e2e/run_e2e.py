@@ -5,7 +5,7 @@ tappable regions (devdump hook) and the app log, and answers AI turns with canne
 unless --real-ai is given. Uses a separate 'e2e' notebook and restores the owner's config and state afterwards.
 Needs a dev build on the Kindle (device/app/build.sh --dev): release builds have none of these hooks.
 
-Usage: run_e2e.py [--real-ai] [--keep-going] [name-filter ...]
+Usage: run_e2e.py [--real-ai] [--local-ai] [--keep-going] [name-filter ...]  (--local-ai: see t_local_ai)
 Screenshots of key screens go to dist/e2e/."""
 import json, pathlib, re, subprocess, sys, time, traceback
 
@@ -1037,12 +1037,15 @@ def t_advanced_ai(d):
 
 class MockAI:
     """An OpenAI-compatible server on this computer for t_own_server: GET /v1/models, POST /v1/chat/completions. The
-    first chat request that carries response_format is refused (as some local servers do), to exercise the retry."""
+    first chat request that carries response_format is refused (as some local servers do), to exercise the retry.
+    Replies ask for a picture when .illustrate is set; a drawing request is answered only after .draw_delay seconds
+    (.draws counts them, .draw_dropped the ones whose caller had gone by then)."""
 
     def __init__(self):
         import http.server, threading
         mock = self
         self.requests = []
+        self.illustrate, self.draw_delay, self.draws, self.draw_dropped, self.stopping = '', 0, 0, 0, False
 
         class H(http.server.BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -1070,9 +1073,25 @@ class MockAI:
                     return self.answer(404, {'error': {'message': 'not found'}})
                 if 'response_format' in body:
                     return self.answer(400, {'error': {'message': 'response_format is not supported by this server'}})
+                if 'Draw: ' in json.dumps(body.get('messages', [])):  # the drawing pass: slow on purpose
+                    mock.draws += 1
+                    t = time.time()
+                    while time.time() - t < mock.draw_delay and not mock.stopping:
+                        time.sleep(0.25)
+                    try:
+                        self.answer(200, {'id': 'mock-d', 'object': 'chat.completion', 'model': body.get('model'),
+                                          'choices': [{'index': 0, 'finish_reason': 'stop', 'message': {'role': 'assistant',
+                                                       'content': json.dumps({'strokes': [[[100, 100], [900, 900]]]})}}]})
+                        self.wfile.flush()
+                        time.sleep(0.3)
+                        self.wfile.write(b'\n')  # (a second write fails if the caller hung up)
+                        self.wfile.flush()
+                    except OSError:
+                        mock.draw_dropped += 1
+                    return
                 m = re.search(r'Mode: (\w+)', json.dumps(body.get('messages', [])))
                 inner = {'read': 'shopping list', 'mode': m.group(1) if m else 'notes', 'style': 'typeset',
-                         'reply': 'Answered by the mock server', 'memo': '', 'illustrate': ''}
+                         'reply': 'Answered by the mock server', 'memo': '', 'illustrate': mock.illustrate}
                 self.answer(200, {'id': 'mock-1', 'object': 'chat.completion', 'model': body.get('model'),
                                   'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(inner)},
                                                'finish_reason': 'stop'}]})
@@ -1082,6 +1101,7 @@ class MockAI:
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
 
     def stop(self):
+        self.stopping = True
         self.srv.shutdown()
         self.srv.server_close()
 
@@ -1189,6 +1209,47 @@ def t_own_server(d):
         d.expect(r'turn ok .* mode notes', timeout=60); d.wait_idle()
         if len([r for r in mock.requests if r[0] == 'POST']) != 1:
             raise Fail('the server\'s answer about the schema was not remembered')
+        # Thinking off (a self-hosted server's own chip) goes out as reasoning_effort none
+        open_feature(d, 'typeup')
+        d.tap('adv:tab:tuning', panel_only=True); time.sleep(1.8)
+        if 'adv:effort:off' not in d.hits()[2]:
+            raise Fail('no Thinking Off chip for a feature on a self-hosted server')
+        d.mark_now(); d.tap('adv:effort:off', panel_only=True); d.expect(r'setting ai_typeup_effort = off')
+        time.sleep(1.5)
+        d.shot('adv-typeup-thinking-off')
+        open_feature(d, 'chat')  # a cloud service: no Off chip
+        d.tap('adv:tab:tuning', panel_only=True); time.sleep(1.8)
+        if 'adv:effort:off' in d.hits()[2] or 'adv:effort:high' not in d.hits()[2]:
+            raise Fail('Thinking chips for a feature on a cloud service')
+        # a picture for a page you've left is stopped when you write on another page (the server takes the turn now)
+        open_feature(d, 'drawing')
+        d.mark_now(); d.tap('adv:svc:custom', panel_only=True); d.expect(r'setting ai_drawing = custom')
+        time.sleep(1.5)
+        mock.illustrate, mock.draw_delay = 'a cat sitting', 120
+        new_page(d)
+        mock.requests.clear()
+        d.mark_now()
+        d.inp('penstroke 1100 900 1700 900')
+        d.expect(r'turn ok .* mode notes', timeout=60)
+        posts = [r for r in mock.requests if r[0] == 'POST']
+        if not posts or posts[0][3].get('reasoning_effort') != 'none':
+            raise Fail(f'thinking off not sent: {[p[3].get("reasoning_effort") for p in posts]}')
+        d.expect(r'drawing with mock-vl', timeout=15, what='the drawing pass')
+        mock.illustrate = ''
+        for _ in range(40):
+            if mock.draws:
+                break
+            time.sleep(0.25)
+        d.wait_idle()
+        new_page(d)
+        d.mark_now()
+        d.inp('penstroke 1100 900 1700 900')
+        d.expect(r"drawing cancelled: you're writing on another page", timeout=30)
+        d.expect(r'drawing stopped', timeout=15)
+        d.expect(r'turn ok .* mode notes', timeout=30, what='the turn, without waiting for the drawing')
+        d.expect_not(r"couldn't draw|took over", wait=2)
+        d.wait_idle()
+        mock.draw_delay = 0
         # Translate goes to the second server with its key (it learns the reply format on its own)
         new_page(d)
         set_mode(d, 'translate')
@@ -1231,6 +1292,120 @@ def t_real_ai(d):
         d.expect(rf'turn ok in [\d.]+ s, mode {expect}', timeout=90, what=f'real {mode}')
         d.wait_idle(120)
         d.shot(f'real-{expect}-{lines[0].split()[0].lower()}')
+
+
+# ----------------------------------------------------------------------------- a real self-hosted server
+
+def t_local_ai(d):
+    """--local-ai: a real self-hosted server (say Ollama behind a key-checking proxy), set up through Settings > AI the
+    way a person would, made the main service, then real handwriting for each feature, timed. Environment:
+    LOCAL_AI_URL (host:port/v1, without http://), LOCAL_AI_KEY_FILE (a file holding the key; never in the repo),
+    LOCAL_AI_MODEL (default gemma4:12b), LOCAL_AI_THINKING (a Thinking chip id set on every feature first, e.g. off;
+    unset: the model decides). Prints a table of answer times; fails if any turn failed."""
+    import os
+    url = os.environ['LOCAL_AI_URL']
+    key = pathlib.Path(os.path.expanduser(os.environ['LOCAL_AI_KEY_FILE'])).read_text().strip()
+    model = os.environ.get('LOCAL_AI_MODEL', 'gemma4:12b')
+    thinking = os.environ.get('LOCAL_AI_THINKING', '')
+    sys.path.insert(0, str(ROOT / 'device' / 'tools' / 'demo'))
+    import run_demo
+    new_page(d)
+    set_setting(d, 'Pen & timing', 'pause_seconds=2.5')
+    d.no_fake()
+    open_ai(d, 'services')
+    d.tap('ai:custom', panel_only=True); time.sleep(1.5)
+    d.tap('ai:server-setup', panel_only=True); time.sleep(2)
+    d.tap('srv:url', panel_only=True); time.sleep(2)
+    kb_type(d, url)
+    d.mark_now(); d.tap('kb:Save', panel_only=True)
+    d.expect(rf'setting custom_url = http://{re.escape(url)}')
+    time.sleep(8)  # the model list is asked for without a key first: what does the person see?
+    print('  without the key:', d.last_status())
+    d.shot('local-ai-no-key')
+    d.tap('srv:key', panel_only=True); time.sleep(2)
+    kb_type(d, key)
+    d.mark_now(); d.tap('kb:Save', panel_only=True); d.expect(r'setting custom_api_key: saved')
+    d.expect(r'Self-hosted answers: \d+ models', timeout=30, what='the model list from the server')
+    time.sleep(2)
+    if f'srv:pick:{model}' not in d.hits()[2]:
+        raise Fail(f'{model} is not among the picks: {[k for k in d.hits()[2] if k.startswith("srv:pick:")]}')
+    d.mark_now(); d.tap(f'srv:pick:{model}', panel_only=True); d.expect(rf'setting custom_model = {re.escape(model)}')
+    time.sleep(1.5)
+    d.shot('local-ai-server')
+    d.tap('< Back', panel_only=True); time.sleep(2)
+    d.mark_now(); d.tap('ai:custom', panel_only=True); d.expect(r'setting provider = custom')
+    time.sleep(1.5)
+    d.shot('local-ai-services')
+    if thinking:
+        for fid in ('chat', 'math', 'typeup', 'translate', 'drawing', 'games'):
+            open_feature(d, fid)
+            d.tap('adv:tab:tuning', panel_only=True); time.sleep(1.8)
+            d.mark_now(); d.tap(f'adv:effort:{thinking}', panel_only=True)
+            d.expect(rf'setting ai_{fid}_effort = ', what=f'thinking {thinking} for {fid}')
+            time.sleep(1.2)
+        d.shot(f'local-ai-thinking-{thinking}')
+    d.home()
+    rows, failed = [], []
+
+    def turn(label, how, timeout=420):
+        d.mark_now()
+        t0 = time.time()
+        how()
+        try:
+            d.expect(r'turn ok in [\d.]+ s', timeout=timeout, what=label)
+        except Fail:
+            failed.append(label)
+            rows.append((label, f'FAILED after {time.time() - t0:.0f} s: {d.last_status()}'))
+            print('  ' + ' | '.join(rows[-1]), flush=True)
+            for line in d.since().splitlines():
+                if re.search(r'API error|status:|couldn|asked again|took', line):
+                    print('    ' + line[:300])
+            d.shot(f'local-ai-FAIL-{label}')
+            d.wait_idle(300)
+            return
+        m = re.findall(r'turn ok in ([\d.]+) s.*on the page ([\d.]+) s after the pen lifted', d.since())
+        rows.append((label, f'answered in {m[-1][0]} s, on the page {m[-1][1]} s after the pen lifted' if m else 'ok'))
+        print('  ' + ' | '.join(rows[-1]), flush=True)
+        d.wait_idle(300)
+        d.shot(f'local-ai-{label}')
+
+    for label, mode, lines in (('chat', 'talk', ['Hello! What is your name?']),
+                               ('chat-2', 'talk', ['What is the tallest mountain?']),
+                               ('math', 'math', ['12 x 14 = 158']),
+                               ('typeup', 'notes', ['shopping list', '- eggs', '- milk']),
+                               ('translate', 'translate', ['Good morning, how are you?']),
+                               ('drawing', 'talk', ['Please draw me a cat'])):
+        d.mark_now(); menu(d, 'newpage'); d.expect(r'\(new\)')
+        time.sleep(1); set_mode(d, mode)
+        turn(label, lambda: run_demo.write(lines))
+        if label == 'drawing':  # the picture comes after the chat reply, on its own request
+            t0 = time.time()
+            try:
+                d.expect(r'drawing: \d+ strokes|drawing: error|drawing: no strokes', timeout=900, what='the drawing')
+            except Fail:
+                pass
+            got = re.findall(r'drawing: (\d+ strokes, \d+ points, [\d.]+ s|error .*|no strokes.*)', d.since())
+            rows.append(('picture', got[-1][:120] if got else f'nothing after {time.time() - t0:.0f} s'))
+            print('  ' + ' | '.join(rows[-1]), flush=True)
+            if not got or not got[-1][0].isdigit():
+                failed.append('picture')
+            d.wait_idle(300)
+            d.shot('local-ai-picture')
+    # an AI game (they all start with the writer's move): Riddles, then 'start'
+    d.home()
+    d.mark_now(); games(d); d.expect(r'status: games')
+    d.tap('tab:ai', panel_only=True); time.sleep(1.5)
+    d.mark_now(); d.tap('ai:Riddles', panel_only=True); d.expect(r'AI game: Riddles')
+    time.sleep(1.5)
+    turn('game Riddles', lambda: run_demo.write(['start']))
+    set_mode(d, 'talk')
+    d.home()
+    print(f'\n  {url} {model} thinking={thinking or "model decides"}')
+    for r in rows:
+        print('  %-14s %s' % r)
+    (OUT / f'local-ai-{thinking or "default"}.json').write_text(json.dumps(rows, indent=1))
+    if failed:
+        raise Fail(f'turns failed: {failed}')
 
 
 # ----------------------------------------------------------------------------- setup / teardown
@@ -1307,7 +1482,7 @@ TESTS = [t_pen_menu_close, t_pen_bounce, t_finger_with_pen_near, t_palm_plus_fin
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    tests = TESTS + ([t_real_ai] if '--real-ai' in sys.argv else []) + ([t_update_install] if '--update-install' in sys.argv else [])
+    tests = TESTS + ([t_real_ai] if '--real-ai' in sys.argv else []) + ([t_local_ai] if '--local-ai' in sys.argv else []) + ([t_update_install] if '--update-install' in sys.argv else [])
     if args:
         tests = [t for t in tests if any(a in t.__name__ for a in args)]
     d = Dev()

@@ -44,7 +44,7 @@ struct AiJob {
 	char base_url[200];
 	int feat;                 /* FEAT_* */
 	int customized;           /* the feature runs on Advanced AI settings, not Inkling's defaults */
-	char effort[8];           /* thinking level: low/medium/high */
+	char effort[8];           /* thinking level: low/medium/high, or off (self-hosted servers only) */
 	int effort_set;           /* chosen in Advanced AI: also sent to services that otherwise get none */
 	int json_mode;            /* 2 = JSON schema, 1 = JSON object, 0 = the schema in the instructions only */
 	int json_auto;            /* own server, custom_json auto: drop to 0 if the server rejects the schema */
@@ -132,7 +132,8 @@ static const char CONFIG_ADVANCED[] =
 	"#   ai_<feature> = default, or a service: anthropic, openai, gemini, bedrock, xai, mistral, openrouter, or a\n"
 	"#     self-hosted server: custom, custom2, custom3\n"
 	"#   ai_<feature>_model = default, or a model of that service\n"
-	"#   ai_<feature>_effort = default, low, medium or high (how much the model thinks first)\n"
+	"#   ai_<feature>_effort = default, low, medium or high (how much the model thinks first); off (no thinking: the\n"
+	"#     quickest replies) for a self-hosted server\n"
 	"#   ai_<feature>_temperature = default, or 0 (most predictable) to 2 (most varied)\n"
 	"#   ai_<feature>_max_tokens = default (16000), or the longest reply in tokens (256 to 64000)\n"
 	"#   ai_<feature>_instructions = your own instructions, added to Inkling's for that feature (one line, up to\n"
@@ -334,7 +335,8 @@ void brain_route(App *a, int feat, Route *r) {
 		if (strcmp(m, rec)) r->custom = 1;
 	} else snprintf(r->model, sizeof r->model, "%s", rec);
 	const char *tuned = prompt_effort(feature_mode(feat));
-	if (a->feat_effort[feat][0] && takes_effort(p)) {
+	int off_elsewhere = !strcmp(a->feat_effort[feat], "off") && !p->custom; /* Off is for self-hosted servers */
+	if (a->feat_effort[feat][0] && takes_effort(p) && !off_elsewhere) {
 		snprintf(r->effort, sizeof r->effort, "%s", a->feat_effort[feat]);
 		r->effort_set = 1;
 		if (strcmp(r->effort, tuned) || p->prov != PROV_ANTHROPIC) r->custom = 1;
@@ -432,7 +434,8 @@ void brain_route_notes(App *a, int feat, char *out, size_t n) {
 		     want && want->custom ? "no address or model yet" : "no key yet", p ? p->short_name : "nothing");
 	}
 	if (!p) { addf(out, n, "No AI service is set up yet: add a key in AI & keys."); return; }
-	if (!r.custom && !p->custom) return; /* (the own server gets its notes even as the main service) */
+	/* (the own server gets its notes even as the main service; Off kept for a cloud service is named) */
+	if (!r.custom && !p->custom && strcmp(a->feat_effort[feat], "off")) return;
 	if (p->custom) {
 		const CustomServer *cs = provider_custom_slot(p->slot);
 		addf(out, n, "%s (your server): its speed, accuracy and privacy are up to it - Inkling can't check them.", p->short_name);
@@ -475,7 +478,10 @@ void brain_route_notes(App *a, int feat, char *out, size_t n) {
 	}
 	if (r.effort_set) {
 		const char *tuned = prompt_effort(feature_mode(feat));
-		if (!strcmp(r.effort, "high")) addf(out, n, "High thinking: more careful, but slower and costlier.");
+		if (!strcmp(r.effort, "off")) addf(out, n, feat == FEAT_MATH || feat == FEAT_DRAW ?
+			"Thinking off: the quickest replies, but more mistakes in maths and rougher drawings." :
+			"Thinking off: the quickest replies, but less careful.");
+		else if (!strcmp(r.effort, "high")) addf(out, n, "High thinking: more careful, but slower and costlier.");
 		else if (!strcmp(r.effort, "medium") && !strcmp(tuned, "low")) addf(out, n, "More thinking than the default: replies take longer.");
 		else if (!strcmp(r.effort, "low") && strcmp(tuned, "low"))
 			addf(out, n, feat == FEAT_MATH ? "Low thinking: faster, but more maths mistakes." : "Low thinking: faster, but less careful.");
@@ -483,6 +489,10 @@ void brain_route_notes(App *a, int feat, char *out, size_t n) {
 			addf(out, n, "Not every model takes a thinking level; if one refuses, Inkling asks again without it.");
 	} else if (a->feat_effort[feat][0] && !takes_effort(p))
 		addf(out, n, "%s doesn't take a thinking level: that setting is ignored here.", p->short_name);
+	else if (!strcmp(a->feat_effort[feat], "off"))
+		addf(out, n, "Thinking off is for self-hosted servers: %s thinks as usual here.", p->short_name);
+	else if (p->custom)
+		addf(out, n, "Many local models think before they answer, which can add 10-20 s: Thinking off (Tuning tab) answers sooner.");
 }
 
 int brain_config_apply(App *a, const char *k, const char *v) {
@@ -550,9 +560,9 @@ int brain_config_apply(App *a, const char *k, const char *v) {
 			}
 			if (!strcmp(rest, "_effort")) {
 				if (dflt) a->feat_effort[f][0] = 0;
-				else if (!strcmp(v, "low") || !strcmp(v, "medium") || !strcmp(v, "high"))
+				else if (!strcmp(v, "low") || !strcmp(v, "medium") || !strcmp(v, "high") || !strcmp(v, "off"))
 					snprintf(a->feat_effort[f], sizeof a->feat_effort[f], "%s", v);
-				else logf_("ignoring %s %.30s: use default, low, medium or high", k, v);
+				else logf_("ignoring %s %.30s: use default, off, low, medium or high", k, v);
 				return 1;
 			}
 		}
@@ -890,6 +900,8 @@ static int job_max(AiJob *j) { return j->max_out > 0 ? j->max_out : MAX_OUT; }
 
 /* The thinking level for this request: Advanced AI's choice, else the tuned level for the mode. */
 static const char *job_effort(AiJob *j) { return j->effort_set ? j->effort : prompt_effort(j->mode); }
+/* Off, in the words of the OpenAI-style APIs */
+static const char *api_effort(AiJob *j) { return strcmp(j->effort, "off") ? j->effort : "none"; }
 
 /* The instructions with the reply schema written in, for services that don't hold replies to a schema (malloc'd). */
 static char *sys_with_schema(const char *sys, cJSON *schema) {
@@ -928,9 +940,11 @@ static void req_anthropic(cJSON *root, AiJob *j, const char *sys, const char *in
 		cJSON_AddStringToObject(root, "system", s2 ? s2 : sys);
 		free(s2);
 	}
-	if (!own || j->effort_set || j->json_mode == 2) {
+	int off = own && j->effort_set && !strcmp(j->effort, "off"); /* Off: no thinking at all, not an effort level */
+	if (off) cJSON_AddStringToObject(cJSON_AddObjectToObject(root, "thinking"), "type", "disabled");
+	if (!own || (j->effort_set && !off) || j->json_mode == 2) {
 		cJSON *oc = cJSON_AddObjectToObject(root, "output_config");
-		if (!own || j->effort_set) cJSON_AddStringToObject(oc, "effort", job_effort(j));
+		if (!own || (j->effort_set && !off)) cJSON_AddStringToObject(oc, "effort", job_effort(j));
 		if (j->json_mode == 2) {
 			cJSON *fmt = cJSON_AddObjectToObject(oc, "format");
 			cJSON_AddStringToObject(fmt, "type", "json_schema");
@@ -971,7 +985,7 @@ static void req_openai(cJSON *root, AiJob *j, const char *sys, const char *info,
 	}
 	cJSON_AddNumberToObject(root, "max_output_tokens", job_max(j));
 	if (j->temp_set) cJSON_AddNumberToObject(root, "temperature", j->temperature);
-	if (j->effort_set) cJSON_AddStringToObject(cJSON_AddObjectToObject(root, "reasoning"), "effort", j->effort);
+	if (j->effort_set) cJSON_AddStringToObject(cJSON_AddObjectToObject(root, "reasoning"), "effort", api_effort(j));
 	if (j->json_mode >= 1) {
 		cJSON *fmt = cJSON_AddObjectToObject(cJSON_AddObjectToObject(root, "text"), "format");
 		if (j->json_mode == 2) {
@@ -1091,8 +1105,8 @@ static void req_chat(cJSON *root, AiJob *j, const char *sys, const char *info, c
 	cJSON_AddNumberToObject(root, "max_tokens", job_max(j));
 	if (j->temp_set) cJSON_AddNumberToObject(root, "temperature", j->temperature);
 	if (j->effort_set) {
-		if (j->provider == PROV_OPENROUTER) cJSON_AddStringToObject(cJSON_AddObjectToObject(root, "reasoning"), "effort", j->effort);
-		else cJSON_AddStringToObject(root, "reasoning_effort", j->effort);
+		if (j->provider == PROV_OPENROUTER) cJSON_AddStringToObject(cJSON_AddObjectToObject(root, "reasoning"), "effort", api_effort(j));
+		else cJSON_AddStringToObject(root, "reasoning_effort", api_effort(j));
 	}
 	cJSON *msgs = cJSON_AddArrayToObject(root, "messages"), *h;
 	if (mode < 2) { /* no schema support: the schema goes into the instructions */
@@ -1272,8 +1286,13 @@ static char *answer_text(int api, cJSON *root, int *refused) {
 static volatile pid_t curl_pid; /* the request in flight, so brain_cancel() can stop it */
 
 /* Stops the request in flight (you started writing again before its answer was shown). Any thread. */
+static volatile pid_t draw_curl_pid; /* the drawing in flight (lane 1), for brain_cancel_draw() */
 void brain_cancel(void) {
 	pid_t p = curl_pid;
+	if (p > 0) kill(p, SIGTERM);
+}
+void brain_cancel_draw(void) {
+	pid_t p = draw_curl_pid;
 	if (p > 0) kill(p, SIGTERM);
 }
 
@@ -1313,6 +1332,7 @@ static int run_curl_ex(const char *url, int post, int max_time, int allow_http) 
 		_exit(127);
 	}
 	if (!io_draw) curl_pid = pid; /* brain_cancel stops the turn's request, never a drawing */
+	else draw_curl_pid = pid;
 	close(pfd[1]);
 	char code[16] = { 0 };
 	ssize_t r = read(pfd[0], code, sizeof code - 1);
@@ -1321,6 +1341,7 @@ static int run_curl_ex(const char *url, int post, int max_time, int allow_http) 
 	int st = 0;
 	waitpid(pid, &st, 0);
 	if (!io_draw) curl_pid = 0;
+	else draw_curl_pid = 0;
 	int ex = WIFEXITED(st) ? WEXITSTATUS(st) : 99;
 	int http = atoi(code);
 	if (ex != 0 && http == 0) return -(1000 + ex);
@@ -2019,6 +2040,15 @@ AiJob *brain_prepare_draw(App *a, const char *desc, int own) {
 }
 
 int brain_draw_is_own(AiJob *j) { return j && j->draw_own; }
+
+/* A drawing that ran out of time on a self-hosted server: say what gives it more (1 if msg was written) */
+int brain_draw_fail_msg(AiJob *j, int status, char *msg, size_t n) {
+	if (!j || status != -1028 || j->provider != PROV_CUSTOM) return 0;
+	const Provider *pv = job_provider(j);
+	snprintf(msg, n, "%s took over %d s to draw it - a longer wait (Settings > AI, the server's settings) or Thinking off "
+		 "for Drawings may help", pv ? pv->short_name : "your server", j->timeout);
+	return 1;
+}
 
 const char *brain_job_custom_feature(AiJob *j) {
 	return j && (j->customized || j->provider == PROV_CUSTOM) && feature_at(j->feat) ? feature_at(j->feat)->label : NULL;
